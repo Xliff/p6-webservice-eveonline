@@ -42,6 +42,10 @@ class WebService::EveOnline::EveCentral {
 		return self!handleResponse($response, $json);
 	}
 
+	# cw: Yes. The method documentation is copied directly from 
+	# 		https://eve-central.com/home/develop.html
+	#     There will be proper documentation... soon™
+
 	# marketstat
 	# 
 	# Endpoint: http://api.eve-central.com/api/marketstat
@@ -201,16 +205,16 @@ class WebService::EveOnline::EveCentral {
 		:$location,
 		:$bid!
 	) {
-		die "Type parameter must be an integer"
+		die "<type> parameter must be an integer"
 			unless $type ~~ Int;
 
-		die "Locale parameter must be 'system' or 'region'."
+		die "<locale> parameter must be 'system' or 'region'."
 			unless $type.lc eq 'system' || $type.lc eq 'region';
 
-		die "Location parameter must be string or int."
+		die "<location> parameter must be string or int."
 			unless $locale ~~ Str || $locale ~~ Int;
 
-		die "Bid parameter must be 1 (buy orders) or 0 (sell orders)"
+		die "<bid> parameter must be 1 (buy orders) or 0 (sell orders)"
 			unless $bid == 0 || $bid == 1;
 
 		my $url = 

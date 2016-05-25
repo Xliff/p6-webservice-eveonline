@@ -1,4 +1,4 @@
-unit class GameData;
+unit class WebService::EveOnline::GameData;
 
 use v6.c;
 
@@ -9,10 +9,11 @@ has $!dbh;
 has %!invMarketGroups;
 has %!marketGroups;
 
-method new {
+submethod BUILD {
+	# cw: -XXX- need proper way to attach non-perl data files to module installation.
 	$!dbh = DBIish.connect(
 		'SQLite',
-		:database<~/projects/p6-webservice-eveonline-fitshopper/Eve_Static.sqlite3>
+		:database</home/cbwood/projects/p6-webservice-eveonline-fitshopper/data/Eve_Static.sqlite3>
 	);
 
 	%!marketGroups := %WebService::EveOnline::Data::Static::MarketGroups::marketGroups;
@@ -21,6 +22,10 @@ method new {
 	for %!marketGroups.kv -> $k, $v {
 		%!invMarketGroups{$v} = $k;
 	}
+}
+
+method new {
+	self.bless();
 }
 
 submethod DESTROY {
