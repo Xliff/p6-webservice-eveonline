@@ -33,7 +33,8 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		HEADER
 
     for @data -> $d {
-    	say "\t{$d<marketGroupID>}\t\t=> '{$d<marketGroupName>}'";
+    	$d<marketGroupName> ~~ s/\'/\\'/;
+    	say "\t{$d<marketGroupID>}\t\t=> '{$d<marketGroupName>}',";
     }
 
     say ");";
