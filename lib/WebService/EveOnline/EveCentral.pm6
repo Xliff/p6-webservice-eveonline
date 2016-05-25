@@ -2,26 +2,30 @@ use v6.c;
 
 class WebService::EveOnline::EveCentral {
 	use HTTP::Client;
-	use XML::Hash::XS:from<Perl5>;
+	use Inline::Perl5;
+	#use XML::Hash::XS:from<Perl5>;
 
 	constant PREFIX = "http://api.eve-central.com/api/";
 
 	has $!http_client;
 
 	submethod BUILD(:$user_agent) {
-		$!http_client = HTTP.Client.new;
-		$!http_client.user_agent = :$user_agent if :$user_agent.defined;
+		$!http_client = HTTP::Client.new;
+		$!http_client.user_agent = $user_agent if $user_agent.defined;
 	}
 
 	method new(:$user_agent) {
-		self.bless($user_agent)
+		self.bless(:$user_agent);
 	}
 
 	method !makeRequest($url) {
 		my $response = $!http_client.get($url);
+		my $p5 = Inline::Perl5.new;
+
+		$p5.use('XML::Hash::XS');
 
 		return $response.success ?? 
-			xml2hash($response.content) !! Nil;
+			$p5.call('xml2hash', $response.content) !!  Nil;
 	}
 
 	# marketstat
@@ -55,13 +59,15 @@ class WebService::EveOnline::EveCentral {
 			$url ~= "{$k > 0 ?? '&' !! '' }typeid={$v}";
 		}
 
-		$url ~= "&regionlimit={$_}" for $regionLimit.list;
+		if $regionLimit.defined {
+			$url ~= "&regionlimit={$_}" for $regionLimit.list;
+		}
 
 		$url ~= "&hours={:$hours}" if $hours.defined;
 		$url ~= "&minQ={:$minQ}" if $minQ.defined;
 		$url ~= "&usesystem={:$useSystem}" if $useSystem.defined;
 
-		return .makeRequest($url);
+		return self!makeRequest($url);
 	}
 
 
