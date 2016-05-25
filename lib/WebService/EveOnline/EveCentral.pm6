@@ -3,6 +3,7 @@ use v6.c;
 class WebService::EveOnline::EveCentral {
 	use HTTP::Client;
 	use Inline::Perl5;
+	use JSON::Fast;
 
 	constant PREFIX = "http://api.eve-central.com/api/";
 
@@ -17,7 +18,7 @@ class WebService::EveOnline::EveCentral {
 		self.bless(:$user_agent);
 	}
 
-	method !handleRespnse($response, $json) {
+	method !handleResponse($response, $json) {
 		my $p5 = Inline::Perl5.new;
 
 		$p5.use('XML::Hash::XS');
@@ -217,4 +218,40 @@ class WebService::EveOnline::EveCentral {
 
 		return self!makeRequest($url, :json);
 	}
+
+
+#	route
+#	Return a path between two locales.
+#
+#	Endpoint: http://api.eve-central.com/api/route/from/XXX/to/YYY
+#	Examples:
+#	http://api.eve-central.com/api/route/from/Jita/to/V2-VC2
+#	Methods: GET
+#	Return data: JSON
+#	Data is provided as a series of positional arguments
+#
+#	Parameter	Description
+#	XXX	System name, or ID, of the origin
+#	YYY	System name, or ID, of the destination
+
+	multi method route(
+		:$fromSys!,
+		:$toSys!
+	) {
+		die "Invalid type for parameter <fromSys>. Must be an integer or string." 
+			unless $fromSys ~~ Str || $fromSys ~~ Int;
+
+		die "Invalid type for parameter <toSys>. Must be an integer or string."
+			unless $toSys ~~ Str || $toSys ~~ Int;
+
+		return self!makeRequest(
+			"{PREFIX}route/from/{$fromSys}/to/{$toSys}", :json
+		);
+	}
+
+	multi method route($fromSys, $toSys) {
+		return self.route(:$fromSys, :$toSys);
+	}
+
+
 }
