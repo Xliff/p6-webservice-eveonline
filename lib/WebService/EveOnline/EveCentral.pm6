@@ -1,46 +1,13 @@
 use v6.c;
 
-class WebService::EveOnline::EveCentral {
+use WebService::EveOnline::Base;
+
+class WebService::EveOnline::EveCentral is WebService::EveOnline::Base {
 	use HTTP::Client;
 	use Inline::Perl5;
 	use JSON::Fast;
 
 	constant PREFIX = "http://api.eve-central.com/api/";
-
-	has $!http_client;
-
-	submethod BUILD(:$user_agent) {
-		$!http_client = HTTP::Client.new;
-		$!http_client.user_agent = $user_agent if $user_agent.defined;
-	}
-
-	method new(:$user_agent) {
-		self.bless(:$user_agent);
-	}
-
-	method !handleResponse($response, $json) {
-		my $p5 = Inline::Perl5.new;
-
-		$p5.use('XML::Hash::XS');
-
-		return $response.success ?? 
-			$json.defined ??
-				from-json($response.content) !!
-				$p5.call('xml2hash', $response.content)
-			!!  Nil;		
-	}
-
-	method !makeRequest($url, :$json) {
-		my $response = $!http_client.get($url);
-
-		return self!handleResponse($response, $json);
-	}
-
-	method !postForm($form, :$json) {
-		my $response = $form.run;
-
-		return self!handleResponse($response, $json);
-	}
 
 	# cw: Yes. The method documentation is copied directly from 
 	# 		https://eve-central.com/home/develop.html
@@ -87,7 +54,7 @@ class WebService::EveOnline::EveCentral {
 		$url ~= "&minQ={$minQ}" if $minQ.defined;
 		$url ~= "&usesystem={$useSystem}" if $useSystem.defined;
 
-		return self!makeRequest($url);
+		return self.makeRequest($url);
 	}
 
 
@@ -129,7 +96,7 @@ class WebService::EveOnline::EveCentral {
 		$url ~= "&setminQ={$minQ}" if $minQ.defined;
 		$url ~= "&usesystem={$useSystem}" if $useSystem.defined;
 
-		return self!makeRequest($url);
+		return self.makeRequest($url);
 	}
 
 	# quicklook path
@@ -174,15 +141,15 @@ class WebService::EveOnline::EveCentral {
 
 		my $res;
 		if $hours.defined || $minQ.defined {
-			my $form = $!http_client.post;
+			my $form = self.http_client.post;
 			$form.url = $url;
 
 			$form.add-field(:sethours($hours)) if $hours.defined;
 			$form.add-field(:setminQ($minQ)) if $minQ.defined;
 
-			return self!postForm($form);
+			return self.postForm($form);
  		} else {
-			return self!makeRequest($url);
+			return self.makeRequest($url);
  		}
 	}
 
@@ -220,7 +187,7 @@ class WebService::EveOnline::EveCentral {
 		my $url = 
 			"{PREFIX}history/for/type/{$type}/{$locale}/{$location}/bid/{$bid}";
 
-		return self!makeRequest($url, :json);
+		return self.makeRequest($url, :json);
 	}
 
 
@@ -248,7 +215,7 @@ class WebService::EveOnline::EveCentral {
 		die "Invalid type for parameter <toSys>. Must be an integer or string."
 			unless $toSys ~~ Str || $toSys ~~ Int;
 
-		return self!makeRequest(
+		return self.makeRequest(
 			"{PREFIX}route/from/{$fromSys}/to/{$toSys}", :json
 		);
 	}
