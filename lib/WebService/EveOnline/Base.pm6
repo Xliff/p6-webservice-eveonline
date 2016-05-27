@@ -8,13 +8,8 @@ class WebService::EveOnline::Base {
 
 	has $.http_client;
 
-	submethod BUILD(:$user_agent) {
-		$!http_client =
-			$user_agent.defined ?? 
-				HTTP::UserAgent(:useragent($user_agent)) 
-				!!
-				HTTP::UserAgent.new;
-		#$!http_client.user_agent = $user_agent if $user_agent.defined;
+	submethod BUILD(:$useragent = "WebService::EveOnline/HTTP::UserAgent/perl6") {
+		$!http_client = HTTP::UserAgent.new(:$useragent); 
 	}
 
 	multi method new(:$user_agent) {
@@ -30,11 +25,15 @@ class WebService::EveOnline::Base {
 
 		$p5.use('XML::Hash::XS');
 
-		return $response.has-content ?? 
+		my $retObj = $response.has-content ?? 
 			$json.defined ??
 				from-json($response.content) !!
 				$p5.call('xml2hash', $response.content)
-			!!  Nil;		
+			!!  Nil;
+
+		# cw: Any unified caching code will have to go HERE.
+
+		return $retObj;		
 	}
 
 	method makeRequest($url, :$json) {

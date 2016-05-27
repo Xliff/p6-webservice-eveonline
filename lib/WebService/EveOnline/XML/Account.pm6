@@ -34,7 +34,7 @@ class WebService::EveOnline::XML::Account {
 	}
 
 	method makeRequest($url) {
-		nextwith("$url?keyID={$.keyID}&vCode={$.vCode}");
+		nextwith("$url?keyID={$.keyID}\&vCode={$.vCode}");
 	}
 
 	method accountStatus {

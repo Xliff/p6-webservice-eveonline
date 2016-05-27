@@ -47,12 +47,12 @@ class WebService::EveOnline::EveCentral is WebService::EveOnline::Base {
 		}
 
 		if $regionLimit.defined {
-			$url ~= "&regionlimit={$_}" for $regionLimit.list;
+			$url ~= "\&regionlimit={$_}" for $regionLimit.list;
 		}
 
-		$url ~= "&hours={$hours}" if $hours.defined;
-		$url ~= "&minQ={$minQ}" if $minQ.defined;
-		$url ~= "&usesystem={$useSystem}" if $useSystem.defined;
+		$url ~= "\&hours={$hours}" if $hours.defined;
+		$url ~= "\&minQ={$minQ}" if $minQ.defined;
+		$url ~= "\&usesystem={$useSystem}" if $useSystem.defined;
 
 		return self.makeRequest($url);
 	}

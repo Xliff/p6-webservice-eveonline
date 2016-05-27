@@ -3,11 +3,10 @@ use v6.c;
 use WebService::EveOnline::Base;
 
 class WebService::EveOnline::XML::Base is WebService::EveOnline::Base {
-	constant PREFIX = 'https://api.eveonline.com/eve/';
+	#constant PREFIX = 'https://api.eveonline.com/eve/';
 
-	has $.characterID;
+	has $.keyID;
 	has $.vCode;
-	has $.prefix;
 
 	submethod BUILD(
 		:$keyID,
@@ -15,8 +14,13 @@ class WebService::EveOnline::XML::Base is WebService::EveOnline::Base {
 	) {
 		$!keyID = $keyID;
 		$!vCode = $vCode;
-		$!prefix = PREFIX;
-	}	
+	}
 
-	
+	setKeyID(Int $keyID) {
+		$!keyID = $keyID;
+	}
+
+	setVCode(Str $vCode) {
+		$!vCode = $vCode;
+	}
 }
