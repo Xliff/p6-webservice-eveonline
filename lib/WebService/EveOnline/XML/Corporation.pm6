@@ -18,12 +18,7 @@ class WebService::EveOnline::XML::Corporation {
 	#     Probably WebService::EveOnline::Static::Cache.
 
 	# cw: Validation structure for FALLBACK.
-	# cw: -XXX- will need some kind of mechanism to handle varying parameters.
-	#     since methods will vary between needing $.characterID, $.corporationID
-	#     or neither............................................................................
-	# cw: -YYY- methods still need validation.
-	my @methods = <
-		accountBalance
+	my @methods = (
 		assetList
 		blueprints
 		bookmarks
@@ -32,7 +27,6 @@ class WebService::EveOnline::XML::Corporation {
 		contractBids
 		contractItems
 		contracts
-		corporationSheet
 		customsOffices
 		facilities
 		facWarStats
@@ -40,21 +34,16 @@ class WebService::EveOnline::XML::Corporation {
 		industryJobsHistory
 		killMails
 		locations
-		marketOrders
 		medals
 		memberMedals
 		memberSecurity
 		memberSecurityLog
-		memberTracking
 		outpostList
 		outpostServiceDetail
 		shareholders
 		standings
-		starbaseDetail
 		starbaseList
 		titles
-		walletJournal
-		walletTransactions
 	>;
 
 	submethod BUILD(
@@ -94,6 +83,100 @@ class WebService::EveOnline::XML::Corporation {
 	
 		nextwith($u);
 	}
+
+	multi method accountBalance(
+		Int :$characterID!,
+		Int :$LIMITED = 0
+	) {
+		die "Optional <LIMITED> parameter can only be 0 or 1"
+			unless $LIMITED == 0 or $LIMITED == 1;
+
+		my $url = "{PREFIX}AccountBalance.xml.aspx?characterID={$characterID}";
+			
+		return $LIMITED == 0 ??
+			self.makeRequest($url)
+			!!
+			WebService::EveOnline::Base.makeRequest($url);
+	}
+	multi method accountBalance($characterID, $LIMITED) {
+		return self.accountBalance(:$characterID, :$LIMITED);
+	}
+
+	multi method corporationSheet(
+		Int :$characterID!,
+		Int :$LIMITED = 0
+	) {
+		die "Optional <LIMITED> parameter can only be 0 or 1"
+			unless $LIMITED == 0 or $LIMITED == 1;
+
+		my $url = "{PREFIX}CorporationSheet.xml.aspx?characterID={$characterID}";
+			
+		return $LIMITED == 0 ??
+			self.makeRequest($url)
+			!!
+			self.WebService::EveOnline::Base::makeRequest($url);
+	}
+	multi method corporationSheet($characterID, $LIMITED) {
+		return self.corporationSheet(:$characterID, :$LIMITED);
+	}
+
+	multi method marketOrders(
+		Int :$characterID!,
+		Int :$orderID
+	) {
+		my $url = "{PREFIX}MarketOrders.xml.aspx?characterID={$characterID}";
+
+		$url ~= "&orderID={$orderID}" if $orderID.defined;
+
+		return self.makeRequest($url);
+	}
+	multi method marketOrders($characterID, $orderID) {
+		return self.marketOrders($:characterID, :$orderID);
+	}
+
+
+	method memberTracking(Int $extended = 0) {
+		die "<extended> parameter must be 0 or 1" 
+			unless $extended == 0 || $extended == 1;
+
+		return self.makeRequest(
+			"{PREFIX}MemberTracking.xml.aspx?extended={$extended}"
+		);
+	}
+
+	method starbaseDetail(Int $itemID!) {
+		return self.makeRequest(
+			"{PREFIX}StarbaseDetail.xml.aspx?itemID={$itemID}"
+		);
+	}
+
+	method walletJournal(
+		Int :$accountKey = 1000,
+		Int :$fromID,
+		Int :$rowCount
+	) {
+		my $url = "{PREFIX}WalletJournal.xml.aspx?accountKey={$accountKey}";
+
+		$url ~= "\&fromID={$fromID}" if $fromID.defined;
+		$url ~= "\&rowCount={$rowCount}" if $rowCount.defined;
+
+		return self.makeRequest($url);
+	}
+
+	method walletTransactions(
+		Int :$accountKey = 1000,
+		Int :$fromID,
+		Int :$rowCount
+	) {
+		my $url = "{PREFIX}WalletTransactions.xml.aspx?accountKey={$accountKey}";
+
+		$url ~= "\&fromID={$fromID}" if $fromID.defined;
+		$url ~= "\&rowCount={$rowCount}" if $rowCount.defined;
+
+		return self.makeRequest($url);
+	}
+
+
 	
 	method FALLBACK($name, |c) {
 		die "Method $name not found"
