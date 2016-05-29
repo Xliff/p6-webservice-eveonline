@@ -65,9 +65,6 @@ class WebService::EveOnline::XML::Corporation {
 		:$corporationID,
 		:$user_agent
 	) {
-		die "Character calls require that the <characterID> is defined"
-			unless $characterID.defined;
-
 		self.bless(
 			:$keyID, :$vCode, :$characterID, :$corporationID, :$user_agent
 		);
