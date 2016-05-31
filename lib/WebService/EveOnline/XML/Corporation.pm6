@@ -63,10 +63,27 @@ class WebService::EveOnline::XML::Corporation {
 		:$vCode,
 		:$characterID,
 		:$corporationID,
-		:$user_agent
+		:$user_agent,
+		:$cache_prefix,
+		:$cache_prefix_add = 'XML/Corporation',
+		:$cache_key = 'cachedUntil'
 	) {
+		my $date_interp = sub (Str $dt) {
+			my $mdt = $dt.subst(' ', 'T');
+
+			return DateTime.new($mdt);
+		};
+
 		self.bless(
-			:$keyID, :$vCode, :$characterID, :$corporationID, :$user_agent
+			:$keyID, 
+			:$vCode, 
+			:$characterID, 
+			:$corporationID, 
+			:$user_agent,
+			:$cache_prefix,
+			:$cache_prefix_add,
+			:$cache_key,
+			:cache_date_interp($date_interp)
 		);
 	}
 

@@ -1,7 +1,6 @@
 use v6.c;
 
 class WebService::EveOnline::Base {
-	#use HTTP::Client;
 	use DateTime::Parse;
 	use HTTP::UserAgent;
 	use Inline::Perl5;
@@ -24,25 +23,30 @@ class WebService::EveOnline::Base {
 		is native { ... };
 
 	submethod BUILD(
-		:$useragent = "WebService::EveOnline/HTTP::UserAgent/perl6",
-		:$cache_prefix = "{%*ENV<HOME>}/.ws_eve",
+		:$user_agent,
+		:$cache_prefix,
 		:$cache_prefix_add,
 		:$cache_key,
 		:$cache_date_interp
 	) {
-		$!http_client = HTTP::UserAgent.new(:$useragent); 
+		my $cp = "{%*ENV<HOME>}/.ws_eve";
+		$cp = $cache_prefix if $cache_prefix.defined;
+		my $ua = "WebService::EveOnline/HTTP::UserAgent/perl6";
+		$ua = $user_agent if $user_agent.defined;
+
+		$!http_client = HTTP::UserAgent.new(:useragent($ua)); 
 		$!cache_prefix = 
-			($cache_prefix, $cache_prefix_add).join($*SPEC.dir-sep);
+			($cp, $cache_prefix_add).join($*SPEC.dir-sep);
 		$!cache_key = $cache_key;
 		$!cache_date_interp = $cache_date_interp;
 	}
 
 	method new(
-		Str :$user_agent,
-		Str :$cache_prefix,
-		Str :$cache_prefix_add,
-		Str :$cache_key,
-		Code :$cache_date_interp
+		Str 	:$user_agent,
+		Str 	:$cache_prefix,
+		Str 	:$cache_prefix_add,
+		Str 	:$cache_key,
+		Code	:$cache_date_interp
 	) {
 		self.bless(
 			:$user_agent, 
@@ -148,16 +152,16 @@ class WebService::EveOnline::Base {
 
 		#say "Req: $url";
 
-		if ($url ~~ / ( <-[ \/? ]>+ '?' .+ ) $/) {
+		if ($url ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/) {
 			my $cf = $/[0].Str;
 			$cf = $cf.subst('&', '_', :g);
 			$cf = $cf.subst('?', '_', :g);
 
-			# say "CF: {$cf}";
+			#say "CF: {$cf}";
 
 			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
 
-			# say "RF: {$!response_file}";
+			say "RF: {$!response_file}";
 
 			if $!response_file.IO.e {
 				# cw: Timestamp in the future indicates cache file 

@@ -21,7 +21,10 @@ class WebService::EveOnline::XML::Account {
 	method new(
 		:$keyID,
 		:$vCode,
-		:$user_agent
+		:$user_agent,
+		:$cache_prefix,
+		:$cache_prefix_add = 'XML/Account',
+		:$cache_key = 'cachedUntil'
 	) {
 		die "Account calls require that the <keyID> is defined"
 			unless $keyID.defined;
@@ -29,8 +32,21 @@ class WebService::EveOnline::XML::Account {
 		die "Account calls requires that the <vCode> is defined"
 			unless $vCode.defined;
 
-		#callwith(:$user_agent);
-		self.bless(:$keyID, :$vCode);
+		my $date_interp = sub (Str $dt) {
+			my $mdt = $dt.subst(' ', 'T');
+
+			return DateTime.new($mdt);
+		};
+
+		self.bless(
+			:$keyID, 
+			:$vCode,
+			:$user_agent,
+			:$cache_prefix,
+			:$cache_prefix_add,
+			:$cache_key,
+			:cache_date_interp($date_interp)
+		);
 	}
 
 	method makeRequest($url) {

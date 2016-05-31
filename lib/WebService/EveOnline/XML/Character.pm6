@@ -61,7 +61,7 @@ class WebService::EveOnline::XML::Character {
 		:$user_agent,
 		:$cache_prefix,
 		:$cache_prefix_add = 'XML/Character',
-		:$cache_key = 'cachedUntil',
+		:$cache_key = 'cachedUntil'
 	) {
 		die "Character calls require that the <characterID> is defined"
 			unless $characterID.defined;
@@ -77,6 +77,7 @@ class WebService::EveOnline::XML::Character {
 			:$vCode, 
 			:$characterID, 
 			:$user_agent,
+			:$cache_prefix,
 			:$cache_prefix_add,
 			:$cache_key,
 			:cache_date_interp($date_interp)
