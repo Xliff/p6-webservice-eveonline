@@ -1,4 +1,4 @@
-unit class WebService::EveOnline::GameData;
+unit class WebService::EveOnline::Data::GameData;
 
 use v6.c;
 
