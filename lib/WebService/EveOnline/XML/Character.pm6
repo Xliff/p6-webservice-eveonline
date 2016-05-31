@@ -61,10 +61,16 @@ class WebService::EveOnline::XML::Character {
 		:$user_agent,
 		:$cache_prefix,
 		:$cache_prefix_add = 'XML/Character',
-		:$cache_key = 'cachedUntil'
+		:$cache_key = 'cachedUntil',
 	) {
 		die "Character calls require that the <characterID> is defined"
 			unless $characterID.defined;
+
+		my $date_interp = sub (Str $dt) {
+			my $mdt = $dt.subst(' ', 'T');
+
+			return DateTime.new($mdt);
+		};
 
 		self.bless(
 			:$keyID, 
@@ -72,7 +78,8 @@ class WebService::EveOnline::XML::Character {
 			:$characterID, 
 			:$user_agent,
 			:$cache_prefix_add,
-			:$cache_key
+			:$cache_key,
+			:cache_date_interp($date_interp)
 		);
 	}
 

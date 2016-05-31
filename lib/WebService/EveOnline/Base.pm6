@@ -7,43 +7,49 @@ class WebService::EveOnline::Base {
 	use Inline::Perl5;
 	use JSON::Fast;
 	use NativeCall;
-
-
-	has $!cache_prefix;
+	
 	has $!response_file;
-	has $!cache_key;
 	has $.http_client;
+	has $!cache_prefix;
+	has $!cache_key;
+	has $!cache_date_interp;
 
 	class utimebuf is repr('CStruct') {
-		has int64 $.acttime is rw;
-		has int64 $.modtime is rw;
+		has int32 $.acttime is rw;
+		has int32 $.modtime is rw;
 	}
 
-	sub utime(Str $fn, Pointer[utimebuf] $t) is native { ... };
+	sub utime(Str $fn, utimebuf $t) 
+		returns int32 
+		is native { ... };
 
 	submethod BUILD(
 		:$useragent = "WebService::EveOnline/HTTP::UserAgent/perl6",
-		:$cache_prefix = "{%*ENV<HOME>}/.ws_eve/",
+		:$cache_prefix = "{%*ENV<HOME>}/.ws_eve",
 		:$cache_prefix_add,
-		:$cache_key
+		:$cache_key,
+		:$cache_date_interp
 	) {
 		$!http_client = HTTP::UserAgent.new(:$useragent); 
 		$!cache_prefix = 
 			($cache_prefix, $cache_prefix_add).join($*SPEC.dir-sep);
 		$!cache_key = $cache_key;
+		$!cache_date_interp = $cache_date_interp;
 	}
 
 	method new(
-		:$user_agent,
-		:$cache_prefix,
-		:$cache_prefix_add,
-		:$cache_key
+		Str :$user_agent,
+		Str :$cache_prefix,
+		Str :$cache_prefix_add,
+		Str :$cache_key,
+		Code :$cache_date_interp
 	) {
 		self.bless(
 			:$user_agent, 
 			:$cache_prefix, 
 			:$cache_prefix_add, 
-			:$cache_key
+			:$cache_key,
+			:$cache_date_interp
 		);
 
 		# cw: -XXX-
@@ -59,8 +65,11 @@ class WebService::EveOnline::Base {
 		# cw: Test to insure all directories between root and $!response_file
 		#     exist.
 		my @parts = $!response_file.split($*SPEC.dir-sep);
-		my @test_parts;
-		for @parts -> $p {
+		# cw: ... of course this will probably need edits for Windows support.
+		my @test_parts = $*SPEC.dir-sep.list;
+		for @parts.kv -> $k, $p {
+			last if $k == @parts.elems - 1;
+
 			@test_parts.push($p);
 			my $cur_p = @test_parts.join($*SPEC.dir-sep);
 			if ! $cur_p.IO.d {
@@ -78,12 +87,14 @@ class WebService::EveOnline::Base {
 		# cw: Set file modified date into THE FUTURE!
 		my $tb = utimebuf.new();
 		$tb.modtime = $ttd;
-		$tb.acttime = int64;
+		$tb.acttime = $ttd;
 
 		# cw: Might want to return better information in this error message
 		#     ...somehow
 		die "Cannot set modification time on '{$!response_file}'"
 			unless utime($!response_file, $tb) == 0;
+
+		say "File modification time set to {$ttd.Str}";
 	}
 
 	method handleResponse($response, $json) {		
@@ -113,21 +124,21 @@ class WebService::EveOnline::Base {
 		# cw: -YYY- Error checking?!? 
 		$ttd = $retObj{$!cache_key}:v;
 		if ! $ttd ~~ Int {
-			# cw: -XXX-
-			#	Parse $ttd... and again, we are foiled by the need to be
-			#	implementation independent!
+			# Parse date using subclass defined function.
 			if ($!cache_date_interp.defined) {
 				$ttd = $!cache_date_interp($ttd);
 			} else {
 				# cw: If all else fails, try DateTime::Parse
-				$ttd = DateTime::Parse.new($ttd).Instant;
+				$ttd = DateTime::Parse.new($ttd);
 				# cw: -YYY-
 				#	  If user provides a default, can't we use that instead
 				#     of just die-ing, here?
 			}
+			$ttd = $ttd.posix if $ttd ~~ DateTime;
 		}
-		return if $response ~~ Hash && $response.was_cached:v == True;
-		self.writeResponse($response.content, $ttd);
+		
+		self.writeResponse($response.content, $ttd)
+			if $response ~~ HTTP::Response;
 
 		return $retObj;		
 	}
@@ -139,13 +150,20 @@ class WebService::EveOnline::Base {
 
 		if ($url ~~ / ( <-[ \/? ]>+ '?' .+ ) $/) {
 			my $cf = $/[0].Str;
-			$cf.subst(/\&\?/, '_', :g);
-			$!response_file = ($!cache_prefix, $url).join($*SPEC.dir-sep);
+			$cf = $cf.subst('&', '_', :g);
+			$cf = $cf.subst('?', '_', :g);
+
+			# say "CF: {$cf}";
+
+			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
+
+			# say "RF: {$!response_file}";
+
 			if $!response_file.IO.e {
 				# cw: Timestamp in the future indicates cache file 
 				#     is still valid. Use it.
-				if $cf.IO.modified >= now {
-					my $h = $cf.IO.open(:r);
+				if $!response_file.IO.modified >= now {
+					my $h = $!response_file.IO.open(:r);
 					$response = $h.slurp-rest;
 					$h.close();
 
