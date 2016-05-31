@@ -58,12 +58,22 @@ class WebService::EveOnline::XML::Character {
 		:$keyID,
 		:$vCode,
 		:$characterID,
-		:$user_agent
+		:$user_agent,
+		:$cache_prefix,
+		:$cache_prefix_add = 'XML/Character',
+		:$cache_key = 'cachedUntil'
 	) {
 		die "Character calls require that the <characterID> is defined"
 			unless $characterID.defined;
 
-		self.bless(:$keyID, :$vCode, :$characterID, :$user_agent);
+		self.bless(
+			:$keyID, 
+			:$vCode, 
+			:$characterID, 
+			:$user_agent,
+			:$cache_prefix_add,
+			:$cache_key
+		);
 	}
 
 	method makeRequest($url) {
@@ -72,7 +82,8 @@ class WebService::EveOnline::XML::Character {
 		$u ~= ($u ~~ /\?/) ?? '&' !! '?';
 		$u ~= "keyID={$.keyID}\&vCode={$.vCode}\&characterID={$.characterID}";
 
-		#say "U: $u";
+		say "T: {now - INIT now}";
+		say "U: $u";
 	
 		nextwith($u);
 	}
@@ -86,7 +97,7 @@ class WebService::EveOnline::XML::Character {
 		);
 	}
 
-	method calendarEventAttendees(@eventIDs) {
+	multi method calendarEventAttendees(@eventIDs) {
 		die "<eventIDs> list must not contain non-integers" 
 			if @eventIDs.first({$_.Int !~~ Int});
 
@@ -114,7 +125,7 @@ class WebService::EveOnline::XML::Character {
 		return self.makeRequest($url);
 	}
 
-	method locations(Int @typeIDs) {
+	multi method locations(Int @typeIDs) {
 		die "<typeIDs> list must not contain non-integers"
 			if @typeIDs.first({$_.Int !~~ Int});
 
@@ -128,7 +139,7 @@ class WebService::EveOnline::XML::Character {
 		return self.calendarEventAttendees($typeID.list);
 	}
 
-	method mailBodies(@IDs) {
+	multi method mailBodies(@IDs) {
 		die "<IDs> list must not contain non-integers"
 			if @IDs.first({$_.Int !~~ Int});
 
@@ -145,12 +156,12 @@ class WebService::EveOnline::XML::Character {
 	method marketOrders(Int $orderID?) {
 		my $url = "{PREFIX}MarketOrders.xml.aspx";
 
-		$url != "?orderID={$contractID}" if $orderID.defined;
+		$url != "?orderID={$orderID}" if $orderID.defined;
 
 		return self.makeRequest($url);
 	}
 
-	method notificationTexts(@IDs) {
+	multi method notificationTexts(@IDs) {
 		die "<IDs> list must not contain non-integers"
 			if @IDs.first({$_.Int !~~ Int});
 
