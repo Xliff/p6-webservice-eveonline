@@ -12,6 +12,7 @@ class WebService::EveOnline::Base {
 	has $!cache_prefix;
 	has $!cache_key;
 	has $!cache_date_interp;
+	has $!cache_ttl;
 
 	class utimebuf is repr('CStruct') {
 		has int32 $.acttime is rw;
@@ -27,6 +28,7 @@ class WebService::EveOnline::Base {
 		:$cache_prefix,
 		:$cache_prefix_add,
 		:$cache_key,
+		:$cache_ttl,
 		:$cache_date_interp
 	) {
 		my $cp = "{%*ENV<HOME>}/.ws_eve";
@@ -34,11 +36,18 @@ class WebService::EveOnline::Base {
 		my $ua = "WebService::EveOnline/HTTP::UserAgent/perl6";
 		$ua = $user_agent if $user_agent.defined;
 
+		die "<cache_ttl> must be an integer value"
+			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
+	
 		$!http_client = HTTP::UserAgent.new(:useragent($ua)); 
-		$!cache_prefix = 
-			($cp, $cache_prefix_add).join($*SPEC.dir-sep);
-		$!cache_key = $cache_key;
-		$!cache_date_interp = $cache_date_interp;
+	
+		$!cache_ttl = $cache_ttl if $cache_ttl.defined;
+		if ($!cache_ttl.defined || $!cache_key.defined) {
+			$!cache_prefix = 
+				($cp, $cache_prefix_add).join($*SPEC.dir-sep);
+			$!cache_key = $cache_key;
+			$!cache_date_interp = $cache_date_interp;
+		}
 	}
 
 	method new(
@@ -46,6 +55,7 @@ class WebService::EveOnline::Base {
 		Str 	:$cache_prefix,
 		Str 	:$cache_prefix_add,
 		Str 	:$cache_key,
+		Str     :$cache_ttl,
 		Code	:$cache_date_interp
 	) {
 		self.bless(
@@ -53,20 +63,10 @@ class WebService::EveOnline::Base {
 			:$cache_prefix, 
 			:$cache_prefix_add, 
 			:$cache_key,
+			:$cache_ttl,
 			:$cache_date_interp
 		);
-
-		# cw: -XXX-
-		#     For now, caching is forced. Should provide the ability 
-		#     to disable.
-		#
-		#     Will need to look into this, SOON since EveCentral does 
-		#     not implement caching and may not be working.
 	}
-
-	#multi method new(WebService::EveOnline::Base:D :$user_agent) {
-	#	self.bless(:$user_agent);
-	#}
 
 	method writeResponse(Str $r, Int $ttd) {
 		# cw: Test to insure all directories between root and $!response_file
@@ -101,7 +101,7 @@ class WebService::EveOnline::Base {
 		die "Cannot set modification time on '{$!response_file}'"
 			unless utime($!response_file, $tb) == 0;
 
-		say "File modification time set to {$ttd.Str}";
+		#say "File modification time set to {$ttd.Str}";
 	}
 
 	method handleResponse($response, $json) {		
@@ -126,26 +126,32 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		# cw: ...the data cached is the retrieved response.
 		my $ttd; 
-		# cw: -YYY- Error checking?!? 
-		$ttd = $retObj{$!cache_key}:v;
-		if ! $ttd ~~ Int {
-			# Parse date using subclass defined function.
-			if ($!cache_date_interp.defined) {
-				$ttd = $!cache_date_interp($ttd);
-			} else {
-				# cw: If all else fails, try DateTime::Parse
-				$ttd = DateTime::Parse.new($ttd);
-				# cw: -YYY-
-				#	  If user provides a default, can't we use that instead
-				#     of just die-ing, here?
+		if ($!cache_key.defined || $!cache_ttl.defined) {
+			if ($!cache_ttl.defined) {
+				$ttd = DateTime.now.posix + $!cache_ttl;
+			} elsif ($!cache_key.defined) {
+				# cw: -YYY- Error checking?!? 
+				$ttd = $retObj{$!cache_key}:v;
+				if ! $ttd ~~ Int {
+					# Parse date using subclass defined function.
+					if ($!cache_date_interp.defined) {
+						$ttd = $!cache_date_interp($ttd);
+					} else {
+						# cw: If all else fails, try DateTime::Parse
+						$ttd = DateTime::Parse.new($ttd);
+						# cw: -YYY-
+						#	  If user provides a default, can't we use that instead
+						#     of just die-ing, here?
+					}
+					$ttd = $ttd.posix if $ttd ~~ DateTime;
+				}
 			}
-			$ttd = $ttd.posix if $ttd ~~ DateTime;
+
+			# cw: ...the data cached is the retrieved response.
+			self.writeResponse($response.content, $ttd)
+				if $response ~~ HTTP::Response;
 		}
-		
-		self.writeResponse($response.content, $ttd)
-			if $response ~~ HTTP::Response;
 
 		return $retObj;		
 	}
@@ -155,7 +161,10 @@ class WebService::EveOnline::Base {
 
 		#say "Req: $url";
 
-		if ($url ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/) {
+		if (
+			$url ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/ 			&&
+			($!cache_ttl.defined || $!cache_key.defined)
+		) {
 			my $cf = $/[0].Str;
 			$cf = $cf.subst('&', '_', :g);
 			$cf = $cf.subst('?', '_', :g);
@@ -164,7 +173,7 @@ class WebService::EveOnline::Base {
 
 			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
 
-			say "RF: {$!response_file}";
+			#say "RF: {$!response_file}";
 
 			if $!response_file.IO.e {
 				# cw: Timestamp in the future indicates cache file 

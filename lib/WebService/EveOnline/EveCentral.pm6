@@ -7,6 +7,10 @@ class WebService::EveOnline::EveCentral {
 
 	constant PREFIX = "http://api.eve-central.com/api/";
 
+	# cw: -XXX-
+	#	  Caching currently disabled for this module, since it will break 
+	#     with most of the calls.
+
 	method new(
 		:$user_agent,
 	) {
