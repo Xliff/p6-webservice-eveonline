@@ -42,10 +42,10 @@ class WebService::EveOnline::Base {
 		$!http_client = HTTP::UserAgent.new(:useragent($ua)); 
 	
 		$!cache_ttl = $cache_ttl if $cache_ttl.defined;
+		$!cache_key = $cache_key if $cache_key.defined;
 		if ($!cache_ttl.defined || $!cache_key.defined) {
 			$!cache_prefix = 
 				($cp, $cache_prefix_add).join($*SPEC.dir-sep);
-			$!cache_key = $cache_key;
 			$!cache_date_interp = $cache_date_interp;
 		}
 	}
