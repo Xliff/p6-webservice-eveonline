@@ -13,6 +13,7 @@ class WebService::EveOnline::Base {
 	has $!cache_key;
 	has $!cache_date_interp;
 	has $!cache_ttl;
+	has $!cache_name_extract;
 
 	class utimebuf is repr('CStruct') {
 		has int32 $.acttime is rw;
@@ -29,7 +30,8 @@ class WebService::EveOnline::Base {
 		:$cache_prefix_add,
 		:$cache_key,
 		:$cache_ttl,
-		:$cache_date_interp
+		:$cache_date_interp,
+		:$cache_name_extract
 	) {
 		my $cp = "{%*ENV<HOME>}/.ws_eve";
 		$cp = $cache_prefix if $cache_prefix.defined;
@@ -46,8 +48,24 @@ class WebService::EveOnline::Base {
 		if ($!cache_ttl.defined || $!cache_key.defined) {
 			$!cache_prefix = 
 				($cp, $cache_prefix_add).join($*SPEC.dir-sep);
-			$!cache_date_interp = $cache_date_interp;
+
+			$!cache_date_interp = $cache_date_interp 
+				if $cache_date_interp.defined;
+
+			$!cache_name_extract = $cache_name_extract.defined ??
+					$cache_name_extract
+					!!
+					&default_cache_name_extract;
 		}
+	}
+
+	sub default_cache_name_extract($u) {
+		return unless $u ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/;
+		my $cf = $/[0].Str;
+		$cf = $cf.subst('&', '_', :g);
+		$cf = $cf.subst('?', '_', :g);
+
+		return $cf;
 	}
 
 	method new(
@@ -56,7 +74,8 @@ class WebService::EveOnline::Base {
 		Str 	:$cache_prefix_add,
 		Str 	:$cache_key,
 		Str     :$cache_ttl,
-		Code	:$cache_date_interp
+		Code	:$cache_date_interp,
+		Code	:$cache_name_extract
 	) {
 		self.bless(
 			:$user_agent, 
@@ -64,7 +83,8 @@ class WebService::EveOnline::Base {
 			:$cache_prefix_add, 
 			:$cache_key,
 			:$cache_ttl,
-			:$cache_date_interp
+			:$cache_date_interp,
+			:$cache_name_extract
 		);
 	}
 
@@ -143,6 +163,9 @@ class WebService::EveOnline::Base {
 						# cw: -YYY-
 						#	  If user provides a default, can't we use that instead
 						#     of just die-ing, here?
+						#
+						#	  Could use <cache_ttl> as a fallback, but the 
+						#     processing order will need to change.
 					}
 					$ttd = $ttd.posix if $ttd ~~ DateTime;
 				}
@@ -161,14 +184,11 @@ class WebService::EveOnline::Base {
 
 		#say "Req: $url";
 
+		my $cf;
 		if (
-			$url ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/ 			&&
-			($!cache_ttl.defined || $!cache_key.defined)
+			($!cache_ttl.defined || $!cache_key.defined)	&&
+			($cf = $!cache_name_extract($url)).defined
 		) {
-			my $cf = $/[0].Str;
-			$cf = $cf.subst('&', '_', :g);
-			$cf = $cf.subst('?', '_', :g);
-
 			#say "CF: {$cf}";
 
 			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
