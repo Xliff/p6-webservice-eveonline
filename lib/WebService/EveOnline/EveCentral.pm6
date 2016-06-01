@@ -2,12 +2,18 @@ use v6.c;
 
 use WebService::EveOnline::Base;
 
-class WebService::EveOnline::EveCentral is WebService::EveOnline::Base {
-	use HTTP::Client;
-	use Inline::Perl5;
-	use JSON::Fast;
+class WebService::EveOnline::EveCentral {
+	also is WebService::EveOnline::Base;
 
 	constant PREFIX = "http://api.eve-central.com/api/";
+
+	method new(
+		:$user_agent,
+	) {
+		self.bless(
+			:$user_agent,
+		);
+	}
 
 	# cw: Yes. The method documentation is copied directly from 
 	# 		https://eve-central.com/home/develop.html

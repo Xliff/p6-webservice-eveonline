@@ -59,6 +59,9 @@ class WebService::EveOnline::Base {
 		# cw: -XXX-
 		#     For now, caching is forced. Should provide the ability 
 		#     to disable.
+		#
+		#     Will need to look into this, SOON since EveCentral does 
+		#     not implement caching and may not be working.
 	}
 
 	#multi method new(WebService::EveOnline::Base:D :$user_agent) {
