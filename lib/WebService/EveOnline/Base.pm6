@@ -33,39 +33,45 @@ class WebService::EveOnline::Base {
 		:$cache_date_interp,
 		:$cache_name_extract
 	) {
-		my $cp = "{%*ENV<HOME>}/.ws_eve";
-		$cp = $cache_prefix if $cache_prefix.defined;
-		my $ua = "WebService::EveOnline/HTTP::UserAgent/perl6";
-		$ua = $user_agent if $user_agent.defined;
-
+		$!http_client = HTTP::UserAgent.new(:useragent(
+			$user_agent.defined ??
+				$user_agent 
+				!! 
+				"WebService::EveOnline/HTTP::UserAgent/perl6"
+		)); 
+	
 		die "<cache_ttl> must be an integer value"
 			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
-	
-		$!http_client = HTTP::UserAgent.new(:useragent($ua)); 
-	
+
 		$!cache_ttl = $cache_ttl if $cache_ttl.defined;
 		$!cache_key = $cache_key if $cache_key.defined;
 		if ($!cache_ttl.defined || $!cache_key.defined) {
-			$!cache_prefix = 
-				($cp, $cache_prefix_add).join($*SPEC.dir-sep);
+			$!cache_prefix = $cache_prefix.defined ??
+				$cache_prefix 
+				!! 
+				"{%*ENV<HOME>}/.ws_eve";
+
+			$!cache_prefix ~= "{$*SPEC.dir-sep}{$cache_prefix_add}"
+				if $cache_prefix_add.defined;
 
 			$!cache_date_interp = $cache_date_interp 
 				if $cache_date_interp.defined;
 
 			$!cache_name_extract = $cache_name_extract.defined ??
-					$cache_name_extract
-					!!
-					&default_cache_name_extract;
+				$cache_name_extract
+				!!
+				&default_cache_name_extract;
 		}
 	}
 
 	sub default_cache_name_extract($u) {
-		return unless $u ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/;
-		my $cf = $/[0].Str;
-		$cf = $cf.subst('&', '_', :g);
-		$cf = $cf.subst('?', '_', :g);
+		my $mu = $u;
+		return unless $mu ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/;
+		$mu = $/[0].Str;
+		$mu = $mu.subst('&', '_', :g);
+		$mu = $mu.subst('?', '_', :g);
 
-		return $cf;
+		return $mu;
 	}
 
 	method new(

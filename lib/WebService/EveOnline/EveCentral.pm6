@@ -7,16 +7,28 @@ class WebService::EveOnline::EveCentral {
 
 	constant PREFIX = "http://api.eve-central.com/api/";
 
-	# cw: -XXX-
-	#	  Caching currently disabled for this module, since it will break 
-	#     with most of the calls.
-
 	method new(
 		:$user_agent,
+		:$cache_ttl = 300,
+		:$cache_prefix_add = "EveCentral",
+		:$cache_name_extract = &ec_cache_name_extract
 	) {
 		self.bless(
 			:$user_agent,
+			:$cache_ttl,
+			:$cache_prefix_add,
+			:$cache_name_extract
 		);
+	}
+
+	sub ec_cache_name_extract($u) {
+		my $mu = $u;
+		return unless $mu ~~ s/^ "{PREFIX}" //;
+		$mu = $mu.subst('/', '_', :g);
+		$mu = $mu.subst('&', '_', :g);
+		$mu = $mu.subst('?', '_', :g);
+
+		return $mu;
 	}
 
 	# cw: Yes. The method documentation is copied directly from 
