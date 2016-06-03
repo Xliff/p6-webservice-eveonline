@@ -41,7 +41,8 @@ class WebService::EveOnline::EveCentral {
 	# Purpose: Retrieve aggregate statistics for the items specified.
 	# Allowed methods: GET (parameter list), POST (form data)
 	# Return data: XML
-	# This API uses parameters in the form of a form submission. The following form parameters are allowed:
+	# This API uses parameters in the form of a form submission. The following form 
+	# parameters are allowed:
 	# 
 	# Parameter		Usage																Required	Multi
 	# hours			Statistics from the last X specified hours.				 			False		False

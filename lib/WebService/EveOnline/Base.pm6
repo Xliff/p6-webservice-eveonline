@@ -180,6 +180,18 @@ class WebService::EveOnline::Base {
 			# cw: ...the data cached is the retrieved response.
 			self.writeResponse($response.content, $ttd)
 				if $response ~~ HTTP::Response;
+
+			# Force the return data into a hash, if necessary.
+			if $retObj ~~ Array {
+				$retObj = { data => $retObj };
+			}
+
+			# Return info about the cached file, in-case it is needed by
+			# the caller.
+			$retObj<__cache__> = {
+				file 	=> $!response_file,
+				expires	=> $!response_file.IO.modified
+			};
 		}
 
 		return $retObj;		
