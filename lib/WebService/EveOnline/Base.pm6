@@ -140,15 +140,25 @@ class WebService::EveOnline::Base {
 			when Str {
 				$retObj = $json.defined ??
 					from-json($response) !!
-					$p5.call('xml2hash', $response);	
+					$p5.call('xml2hash', $response);
+
+				say "R: {$response}";	
 			}
 
 			when HTTP::Response {
-				$retObj = $response.is-success && $response.has-content ??
-					$json.defined ??
+				if $response.has-content {
+					$retObj = $json.defined ??
 						from-json($response.content) !!
-						$p5.call('xml2hash', $response.content)
-					!! Nil;
+						$p5.call('xml2hash', $response.content);
+
+					say "R: {$response.content}";
+	
+				} elsif ! $response.has-content {
+
+					#say "No response content";
+					return;
+
+				}
 			}
 		}
 
@@ -159,6 +169,11 @@ class WebService::EveOnline::Base {
 			} elsif ($!cache_key.defined) {
 				# cw: -YYY- Error checking?!? 
 				$ttd = $retObj{$!cache_key}:v;
+
+				dd $retObj;
+				say "Cache_key: {$!cache_key}";
+				say "TTD: [{$ttd}]";
+
 				if ! $ttd ~~ Int {
 					# Parse date using subclass defined function.
 					if ($!cache_date_interp.defined) {
@@ -200,7 +215,7 @@ class WebService::EveOnline::Base {
 	method makeRequest($url, :$json) {
 		my $response;
 
-		#say "Req: $url";
+		say "Req: $url";
 
 		my $cf;
 		if (

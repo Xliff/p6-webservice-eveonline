@@ -18,7 +18,7 @@ class WebService::EveOnline::XML::Corporation {
 	#     Probably WebService::EveOnline::Static::Cache.
 
 	# cw: Validation structure for FALLBACK.
-	my @methods = (
+	my @methods = <
 		assetList
 		blueprints
 		bookmarks
@@ -68,8 +68,16 @@ class WebService::EveOnline::XML::Corporation {
 		:$cache_prefix_add = 'XML/Corporation',
 		:$cache_key = 'cachedUntil'
 	) {
+		die "<vCode> parameter is required for all Corporation API calls"
+			unless $vCode.defined;
+
+		die "<keyID> parameter is required for all Corporation API calls"
+			unless $keyID.defined;	
+
 		my $date_interp = sub (Str $dt) {
 			my $mdt = $dt.subst(' ', 'T');
+
+			say "MDT: {$mdt}";
 
 			return DateTime.new($mdt);
 		};
@@ -145,7 +153,7 @@ class WebService::EveOnline::XML::Corporation {
 		return self.makeRequest($url);
 	}
 	multi method marketOrders($characterID, $orderID) {
-		return self.marketOrders($:characterID, :$orderID);
+		return self.marketOrders(:$characterID, :$orderID);
 	}
 
 
