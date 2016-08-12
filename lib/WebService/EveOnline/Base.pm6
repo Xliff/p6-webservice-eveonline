@@ -142,7 +142,7 @@ class WebService::EveOnline::Base {
 					from-json($response) !!
 					$p5.call('xml2hash', $response);
 
-				say "R: {$response}";	
+				#say "R: {$response}";
 			}
 
 			when HTTP::Response {
@@ -151,7 +151,7 @@ class WebService::EveOnline::Base {
 						from-json($response.content) !!
 						$p5.call('xml2hash', $response.content);
 
-					say "R: {$response.content}";
+					#say "R: {$response.content}";
 	
 				} elsif ! $response.has-content {
 
@@ -170,9 +170,8 @@ class WebService::EveOnline::Base {
 				# cw: -YYY- Error checking?!? 
 				$ttd = $retObj{$!cache_key}:v;
 
-				dd $retObj;
-				say "Cache_key: {$!cache_key}";
-				say "TTD: [{$ttd}]";
+				#say "Cache_key: {$!cache_key}";
+				#say "TTD: [{$ttd}]";
 
 				if ! $ttd ~~ Int {
 					# Parse date using subclass defined function.
@@ -192,21 +191,19 @@ class WebService::EveOnline::Base {
 				}
 			}
 
-			# cw: ...the data cached is the retrieved response.
-			self.writeResponse($response.content, $ttd)
-				if $response ~~ HTTP::Response;
-
 			# Force the return data into a hash, if necessary.
-			if $retObj ~~ Array {
+			if $retObj !~~ Hash {
 				$retObj = { data => $retObj };
 			}
 
-			# Return info about the cached file, in-case it is needed by
-			# the caller.
+			# cw: ...the data cached is the retrieved response.
+			self.writeResponse($response.content, $ttd)
+				if $response ~~ HTTP::Request && $response.is-success;
+
 			$retObj<__cache__> = {
 				file 	=> $!response_file,
 				expires	=> $!response_file.IO.modified
-			};
+			} if $response !~~ HTTP::Response || $response.is-success;
 		}
 
 		return $retObj;		

@@ -77,8 +77,6 @@ class WebService::EveOnline::XML::Corporation {
 		my $date_interp = sub (Str $dt) {
 			my $mdt = $dt.subst(' ', 'T');
 
-			say "MDT: {$mdt}";
-
 			return DateTime.new($mdt);
 		};
 
