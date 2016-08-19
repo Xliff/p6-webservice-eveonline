@@ -111,6 +111,8 @@ class WebService::EveOnline::Base {
 			}
 		}
 
+		say "WR: Writing to {$!response_file}";
+
 		my $h = $!response_file.IO.open(:w, :bin);
 		die "Cannot open cache file '{$!response_file}' for writing"
 			unless $h ~~ IO::Handle;
@@ -151,11 +153,11 @@ class WebService::EveOnline::Base {
 						from-json($response.content) !!
 						$p5.call('xml2hash', $response.content);
 
-					#say "R: {$response.content}";
+					say "R: {$response.content}";
 	
 				} elsif ! $response.has-content {
 
-					#say "No response content";
+					say "No response content";
 					return;
 
 				}
@@ -163,17 +165,17 @@ class WebService::EveOnline::Base {
 		}
 
 		my $ttd; 
-		if ($!cache_key.defined || $!cache_ttl.defined) {
-			if ($!cache_ttl.defined) {
+		if $!cache_key.defined || $!cache_ttl.defined {
+
+			say "Cache_key: {$!cache_key}" if $!cache_key.defined;
+
+			if $!cache_ttl.defined {
 				$ttd = DateTime.now.posix + $!cache_ttl;
-			} elsif ($!cache_key.defined) {
+			} elsif $!cache_key.defined {
 				# cw: -YYY- Error checking?!? 
 				$ttd = $retObj{$!cache_key}:v;
 
-				#say "Cache_key: {$!cache_key}";
-				#say "TTD: [{$ttd}]";
-
-				if ! $ttd ~~ Int {
+				if $ttd !~~ Int {
 					# Parse date using subclass defined function.
 					if ($!cache_date_interp.defined) {
 						$ttd = $!cache_date_interp($ttd);
@@ -191,14 +193,18 @@ class WebService::EveOnline::Base {
 				}
 			}
 
+			#say "TTD: [{$ttd}]";
+
 			# Force the return data into a hash, if necessary.
 			if $retObj !~~ Hash {
 				$retObj = { data => $retObj };
 			}
 
 			# cw: ...the data cached is the retrieved response.
+			#say "RT: { $response.^name }";
+			#say "IS: { $response.is-success }";
 			self.writeResponse($response.content, $ttd)
-				if $response ~~ HTTP::Request && $response.is-success;
+				if $response ~~ HTTP::Response && $response.is-success;
 
 			$retObj<__cache__> = {
 				file 	=> $!response_file,
