@@ -111,7 +111,7 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		say "WR: Writing to {$!response_file}";
+		#say "WR: Writing to {$!response_file}";
 
 		my $h = $!response_file.IO.open(:w, :bin);
 		die "Cannot open cache file '{$!response_file}' for writing"
@@ -153,11 +153,11 @@ class WebService::EveOnline::Base {
 						from-json($response.content) !!
 						$p5.call('xml2hash', $response.content);
 
-					say "R: {$response.content}";
+					#say "R: {$response.content}";
 	
 				} elsif ! $response.has-content {
 
-					say "No response content";
+					#say "No response content";
 					return;
 
 				}
@@ -167,7 +167,7 @@ class WebService::EveOnline::Base {
 		my $ttd; 
 		if $!cache_key.defined || $!cache_ttl.defined {
 
-			say "Cache_key: {$!cache_key}" if $!cache_key.defined;
+			#say "Cache_key: {$!cache_key}" if $!cache_key.defined;
 
 			if $!cache_ttl.defined {
 				$ttd = DateTime.now.posix + $!cache_ttl;
