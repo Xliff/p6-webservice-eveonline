@@ -13,6 +13,7 @@ my %market;
 enum Filter <
 	NONE
 	HUB
+	REGION
 	STATION
 	SECLEV_GT
 	SECLEV_LT
@@ -113,6 +114,7 @@ sub retrieveMarketData {
 
 	my Filter $filter = HUB;
 	my $seclev = 0.5;
+	my $region;
 	my $station;
 
 	for %fit<_BYID_>.keys -> $k {
@@ -138,6 +140,16 @@ sub retrieveMarketData {
 				%m<quicklook><buy_orders><order> = 
 					%m<quicklook><buy_orders><order>.grep: 
 						{ $_<station> == any(@hubs); }
+			}
+
+			when REGION {
+				%m<quicklook><sell_orders><order> = 
+					%m<quicklook><sell_orders><order>.grep: 
+						{ $_<region> == $region; }
+
+				%m<quicklook><buy_orders><order> = 
+					%m<quicklook><buy_orders><order>.grep: 
+						{ $_<region> == $region; }
 			}
 
 			when STATION {
@@ -194,15 +206,6 @@ sub retrieveMarketData {
 		%market{$k}<buy> = %m<quicklook><buy_orders><order>.sort: { 
 			$^b<price> <=> $^a<price> 
 		};
-
-		#sub head($h) {
-		#	say "$h\n{'=' x $h.chars}\n";
-		#}
-
-		#head("LOW SELL ORDER");
-		#dd %market{$k}<sell>[0];
-		#head("HIGH BUY ORDER");
-		#dd %market{$k}<buy>[0];
 	}
 }
 
