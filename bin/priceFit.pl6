@@ -235,9 +235,13 @@ sub resolveFitPricing {
 
 # cw: Really need a module to say "comma-ize this number"
 sub commaize($_v) {
-	my $decimal = $_v ~~ / '.' / ?? $_v.subst(/ \d+ '.'/, '') !! '0';
+	my $length = 18;
+	my $decimal = $_v ~~ / '.' / ?? $_v.subst(/ \d+ '.'/, '') !! '00';
 	my $v = $_v.Int;
-	"{$v.flip.comb(3).join(',').flip}.{$decimal}"
+	my $c = "{$v.flip.comb(3).join(',').flip}.{$decimal}";
+	my $s = '';
+	$s = ' ' x ($length - $c.chars) if $length > $c.chars;
+	"$s$c";
 }
 
 sub MAIN (:$filename!, :$sqlite) {
