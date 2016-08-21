@@ -9,6 +9,7 @@ use WebService::EveOnline::EveCentral;
 my $sq_dbh;
 my %fit;
 my %market;
+my $fitname;
 
 enum Filter <
 	NONE
@@ -54,7 +55,9 @@ sub realReadFit(Str $f) {
 	for $f.lines -> $l {
 		if $l ~~ /^ '[' (\w+) (',' ' ' ? (<-[ \] ]>+)) ']' $/ {
 			#say "Ship: {$/[0].Str}";
-			%fit_data{$/[0].Str} = 1;
+			my $shiptype = $/[0].Str;
+			%fit_data{$shiptype} = 1;
+			$fitname = $/[1][0].Str ~ " ($shiptype)";
 			next;
 		}
 
@@ -116,6 +119,8 @@ sub retrieveMarketData {
 	my $seclev = 0.5;
 	my $region;
 	my $station;
+	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
+	my @avoidance = (60003760, 60012412);
 
 	for %fit<_BYID_>.keys -> $k {
 		say "Retrieving Data for item '{ %fit<_BYID_>{$k}<name> }'";
@@ -135,21 +140,38 @@ sub retrieveMarketData {
 			when HUB {
 				%m<quicklook><sell_orders><order> = 
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<station> == any(@hubs); }
+						{ 
+							$_<station> == any(@hubs)
+							&& 
+							$_<station> !== any(@avoidance) 
+						} 
 
 				%m<quicklook><buy_orders><order> = 
 					%m<quicklook><buy_orders><order>.grep: 
-						{ $_<station> == any(@hubs); }
+						{ 
+							$_<station> == any(@hubs)
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 			}
 
+			# cw: Consider how these could implement multiple values
 			when REGION {
 				%m<quicklook><sell_orders><order> = 
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<region> == $region; }
+						{ 
+							$_<region> == $region
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 
 				%m<quicklook><buy_orders><order> = 
 					%m<quicklook><buy_orders><order>.grep: 
-						{ $_<region> == $region; }
+						{ 
+							$_<region> == $region 
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 			}
 
 			when STATION {
@@ -165,31 +187,55 @@ sub retrieveMarketData {
 			when SECLEV_GT {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> >= $seclev; }
+						{ 
+							$_<security> >= $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> >= $seclev; }
+						{ 
+							$_<security> >= $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 			}
 
 			when SECLEV_LT {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> <= $seclev; }
+						{ 
+							$_<security> <= $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> <= $seclev; }
+						{ 
+							$_<security> <= $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 			}
 
 			when SECLEV_EQ {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> == $seclev; }
+						{ 
+							$_<security> == $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep: 
-						{ $_<security> == $seclev; }
+						{ 
+							$_<security> == $seclev
+							&& 
+							$_<station> !== any(@avoidance) 
+						}
 			}
 
 			default {
@@ -237,6 +283,8 @@ sub resolveFitPricing {
 sub commaize($_v) {
 	my $length = 18;
 	my $decimal = $_v ~~ / '.' / ?? $_v.subst(/ \d+ '.'/, '') !! '00';
+	$decimal ~= '0' if $decimal.chars < 2;
+
 	my $v = $_v.Int;
 	my $c = "{$v.flip.comb(3).join(',').flip}.{$decimal}";
 	my $s = '';
@@ -265,6 +313,8 @@ sub MAIN (:$filename!, :$sqlite) {
 
 	my %cart = resolveFitPricing;
 	my $total = 0;
+	my $mq = '=' x 40;
+	say "\n{$mq}\nShopping List for fit: {$fitname.uc}\n{$mq}";
 	for %cart.keys -> $k {
 		say "$k:";
 		for @(%cart{$k}) -> $o {
@@ -272,6 +322,5 @@ sub MAIN (:$filename!, :$sqlite) {
 			$total += $o<subtotal>;
 		}
 	}
-
-	say "TOTAL INVOICE: {commaize($total)} ISK";
+	say "{$mq}\nTOTAL INVOICE: {commaize($total)} ISK\n{$mq}";
 }

@@ -218,8 +218,6 @@ class WebService::EveOnline::Base {
 	method makeRequest($url, :$json) {
 		my $response;
 
-		say "Req: $url";
-
 		my $cf;
 		if (
 			($!cache_ttl.defined || $!cache_key.defined)	&&
@@ -244,6 +242,7 @@ class WebService::EveOnline::Base {
 			}
 		}
 
+		say "Req: $url";
 		$response = $!http_client.get($url);
 
 		return self.handleResponse($response, $json);
