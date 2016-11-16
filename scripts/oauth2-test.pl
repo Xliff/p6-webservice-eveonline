@@ -1,55 +1,58 @@
 use v6.c;
 
 use Base64;
-use HTTP::Client;
+use LWP::Simple;
+use HTML::Parser::XML;
 use HTTP::Server::Simple;
+use XML;
 
 constant TIMEOUT = 45;
 
-class TestOauth does HTTP::Server::Simple {
-	has %!header;
-	has $!path;
-	has $!query_string;
-	has $!supplier;
-	has $!state;
+# class TestOauth does HTTP::Server::Simple {
+# 	has %!header;
+# 	has $!path;
+# 	has $!query_string;
+# 	has $!supplier;
+# 	has $!state;
 
-	method new($supplier, $state, $port) {
-		self.bless(:$supplier, :$state, :$port);
-	}
+# 	method new($supplier, $state, $port) {
+# 		self.bless(:$supplier, :$state, :$port);
+# 	}
 
-	submethod BUILD(:$supplier, :$state, :$port) {
-		$!supplier = $supplier;
-		$!state = $state;
-		$!port = $port;
-		$!host = self.lookup_localhost;
-	}
+# 	submethod BUILD(:$supplier, :$state, :$port) {
+# 		$!supplier = $supplier;
+# 		$!state = $state;
+# 		$!port = $port;
+# 		$!host = self.lookup_localhost;
+# 	}
 
-	method setup(:$path, :$query_string) {
-		$!path = $path;
-		$!query_string = $query_string;
-	}
+# 	method setup(:$path, :$query_string) {
+# 		$!path = $path;
+# 		$!query_string = $query_string;
+# 	}
 
-	method header($key, $value) {
-		%!header{$key} = $value;
-	}
+# 	method header($key, $value) {
+# 		%!header{$key} = $value;
+# 	}
 
-	method handle_request() {
-		callsame;
+# 	method handle_request() {
+# 		callsame;
 
-		# cw: Send to channel only if we're relatively sure it is the 
-		#     response we are looking for.
-		my $s = $!state;
-		if $!query_string ~~ /$s/ {
-			$!supplier.emit($!query_string);
-			self.stop;
-		}
-	}
+# 		# cw: Send to channel only if we're relatively sure it is the 
+# 		#     response we are looking for.
+# 		my $s = $!state;
+# 		if $!query_string ~~ /$s/ {
+# 			$!supplier.emit($!query_string);
+# 			self.stop;
+# 		}
+# 	}
 	
-	method stop() {
-		say "=== Attempting to stop server.";
-		$!listener.close;	
-	}
-}
+# 	method stop() {
+# 		# cw: XXX - Didn't work, so will have to override net_server.
+# 		say "=== Attempting to stop server.";
+# 		$!listener.close;	
+# 	}
+# }
 
 my %privateData;
 if ".privateData".IO.e {
@@ -76,18 +79,18 @@ die "Missing required private parameters"
 		%privateData<username>.defined  &&
 		%privateData<password>.defined;
 
-my $ipc = Supplier.new;
-my $sup = $ipc.Supply;
+# my $ipc = Supplier.new;
+# my $sup = $ipc.Supply;
 my $data;
 my $state;
 
 # cw: Encode and assemble query string.
-my $params = (
-	[ 'ReurnUrl', 		'/oauth/authorize' ],
+my $p = (
+	#[ 'ReturnUrl', 		'/oauth/authorize' ],
 	[ 'response_type', 	'code' ],
-	[ 'redirect_uri', 	'https://localhost:8888/' ],
+	[ 'redirect_uri', 	'http://localhost:8888/' ],
 	[ 'client_id', 		%privateData<client_id> ],
-	[ 'scope', 			'characterContactsRead' ],
+	[ 'scope', 			'characterFittingsRead' ],
 	[ 'state',  		($state = 'variable' ~ (^999).pick) ]
 )
 .map({ 
@@ -96,35 +99,72 @@ my $params = (
 })
 .join('&');
 
-$sup.tap: { $data = $_; }
+# $sup.tap: { $data = $_; }
 
-my $to;
-my $promise = start {
- 	my $www = TestOauth.new($ipc, $state, 8888);
+# my $to;
+# my $promise = start {
+#  	my $www = TestOauth.new($ipc, $state, 8888);
 
- 	$to = Promise.in(TIMEOUT).then({ $www.stop });
- 	$www.run;
+#  	$to = Promise.in(TIMEOUT).then({ $www.stop });
+#  	$www.run;
+# }
+
+# cw: Using LWP::Simple for SSL support.
+
+my $url = "https://login.eveonline.com/oauth/authorize?{ $p }";
+my $client = LWP::Simple.new;
+my $content;
+
+say $url;
+
+if ! "outputRequest".IO.e {
+	# cw: -XXX XXX- Bug in LWP::Simple screws up the redirect. Must fix.
+	$content = $client.get($url);
+	my $fh = "outputRequest".IO.open(:w);
+	$fh.print($content);
+	$fh.close;
+} else {
+	$content = "outputRequest".IO.slurp;
 }
 
-my $client = HTTP::Client.new;
-my $form = $client.post;
-my $url = "http://login.eveonline.com/Account/LogOn?$params";
 
-$form.url($url);		
-$form.add-field(
-	ClientIdentifier	=> %privateData<client_id>,
-	Username 			=> %privateData<username>,
-	Password 			=> %privateData<password>,
-	RememberMe			=> 'false'
-);
-$form.run;
-say "Sent request to $url";
 
-await $promise;
-$to.keep(True) if $to ~~ Promise;
-if !$data.defined {
-	die "Did not receive return request from auth server\n";
+# cw: Now here is the tricky part. We need to look at the contents to see what
+#     POST request we send, next. 
+#
+# First, check for login form.
+my $xmldoc = HTML::Parser::XML.new.parse($content);
+my @fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>);
+my %found;
+for @fields -> $f {
+	next unless $f<name>.defined;
+	%found{$f<name>} = 1;
 }
 
-dd $data;
+say "LoginForm" if 
+	%found<UserName> 			&& 
+	%found<Password> 			&&
+	%found<RememberMe>			&&
+	%found<ClientIdentifier>;
+
+exit;
+
+# cw: XXX - All of this code will need to be refactored for LWP::Simple
+# $form.url($url);		
+# $form.add-field(
+# 	ClientIdentifier	=> %privateData<client_id>,
+# 	UserName 			=> %privateData<username>,
+# 	Password 			=> %privateData<password>,
+# 	RememberMe			=> 'false'
+# );
+# $form.run;
+# say "Sent request to $url";
+
+# await $promise;
+# $to.keep(True) if $to ~~ Promise;
+# if !$data.defined {
+# 	die "Did not receive return request from auth server\n";
+# }
+
+# dd $data;
 
