@@ -54,6 +54,14 @@ constant TIMEOUT = 45;
 # 	}
 # }
 
+sub urlEncode($s) {
+	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
+}
+
+sub prepParams($l) {
+	$l.map({ $_[1] = urlEncode($_[1]); $_.join('='); }).join('&');
+}
+
 my %privateData;
 if ".privateData".IO.e {
 	my $contents = ".privateData".IO.slurp;
@@ -85,19 +93,14 @@ my $data;
 my $state;
 
 # cw: Encode and assemble query string.
-my $p = (
+my $p = prepParams([
 	#[ 'ReturnUrl', 		'/oauth/authorize' ],
 	[ 'response_type', 	'code' ],
 	[ 'redirect_uri', 	'http://localhost:8888/' ],
 	[ 'client_id', 		%privateData<client_id> ],
 	[ 'scope', 			'characterFittingsRead' ],
 	[ 'state',  		($state = 'variable' ~ (^999).pick) ]
-)
-.map({ 
-	$_[1] = $_[1].subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
-	$_.join('='); 
-})
-.join('&');
+]);
 
 # $sup.tap: { $data = $_; }
 
@@ -141,30 +144,18 @@ for @fields -> $f {
 	%found{$f<name>} = 1;
 }
 
-say "LoginForm" if 
+if (
 	%found<UserName> 			&& 
 	%found<Password> 			&&
 	%found<RememberMe>			&&
 	%found<ClientIdentifier>;
+) {
+	# Send login data and get request.
 
-exit;
-
-# cw: XXX - All of this code will need to be refactored for LWP::Simple
-# $form.url($url);		
-# $form.add-field(
-# 	ClientIdentifier	=> %privateData<client_id>,
-# 	UserName 			=> %privateData<username>,
-# 	Password 			=> %privateData<password>,
-# 	RememberMe			=> 'false'
-# );
-# $form.run;
-# say "Sent request to $url";
-
-# await $promise;
-# $to.keep(True) if $to ~~ Promise;
-# if !$data.defined {
-# 	die "Did not receive return request from auth server\n";
-# }
-
-# dd $data;
+my $formBody = prepParms([
+ 	[ 'ClientIdentifier', 	%privateData<client_id> ],
+ 	[ 'UserName',		 	%privateData<username>  ],
+ 	[ 'Password',			%privateData<password>  ],
+ 	[ 'RememberMe', 		false					]
+]);
 
