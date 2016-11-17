@@ -255,16 +255,6 @@ my $p = prepParams([
 	[ 'state',  		($state = 'variable' ~ (^999).pick) ]
 ]);
 
-# $sup.tap: { $data = $_; }
-
-# my $to;
-# my $promise = start {
-#  	my $www = TestOauth.new($ipc, $state, 8888);
-
-#  	$to = Promise.in(TIMEOUT).then({ $www.stop });
-#  	$www.run;
-# }
-
 my $prefix = "https://login.eveonline.com/";
 my $url = "{ $prefix }oauth/authorize?{ $p }";
 my $postclient = HTTP::UserAgent.new(:max-redirects(0));
@@ -272,13 +262,12 @@ my $client = HTTP::UserAgent.new;
 my $response;
 my $content;
 
-say $url;
+say "Fetching $url";
 
 if ! "outputRequest1".IO.e {
 	$response = $client.get($url);
 
-	die "HTTP request to '$url' failed!"
-		unless $response.is-success;
+	die "HTTP request to '$url' failed!" unless $response.is-success;
 
 	$content = $response.content;
 	my $fh = "outputRequest1".IO.open(:w);
@@ -292,23 +281,27 @@ if ! "outputRequest1".IO.e {
 #     POST request we send, next. 
 #
 # First, check for login form.
+my @hidden_fields;
+my %found;
 my $xmldoc = HTML::Parser::XML.new.parse($content);
-my @fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>);
-my @hidden_fields, %found;
+my @fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>); 
+my @sel = $xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
 # cw: Should be a sub
-for @fields -> $f {
+for |(@fields, @sel).flat -> $f {
 	next unless $f<name>.defined;
+	push @hidden_fields, $f if ($f<type> // '') eq 'hidden';
 	%found{$f<name>} = 1;
 }
 
-my @forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
+my @forms;
 if (
 	%found<UserName> 			&& 
 	%found<Password> 			&&
 	%found<RememberMe>			&&
 	%found<ClientIdentifier>;
 ) {
+	@forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
 	# Send login data and get request.
 	my $form_data = {
 	 	ClientIdentifier 	=> %privateData<client_id>,
@@ -394,61 +387,147 @@ if (
 		}
 	}
 
-	%found = {};
+	%found = ();
 	$xmldoc = HTML::Parser::XML.new.parse($content);
-	@fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>);
+	@fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>); 
+	@sel = $xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
 	# cw: Should be a sub
-	for @fields -> $f {
+	for |(@fields, @sel).flat -> $f {
+		next unless $f<name>.defined;
 		push @hidden_fields, $f if ($f<type> // '') eq 'hidden';
 		%found{$f<name>} = 1;
 	}
 }
 
-# cw: Character selection should be wrapped in an if.
+# cw: Next, check for character selection form.
+if %found<CharacterId> {
+	my @options = $xmldoc.elements(:TAG<option>, :RECURSE<100>);
 
-@fields = $xmldoc.elements(:TAG<option>, :RECURSE<100>);
+	die "No characters exist on this account!\n" unless @options.elems;
 
-die "No characters exist on this account!\n"
-	unless @fields.elems;
-
-my $input = '';
-my %toons = do for @fields { 
-	if (%privateData<CHARACTER> // '') eq $_[0].text {
-		$input = $_<value>;
-	}
-	$_[0].text => $_<value> 
-};
-unless $input.chars {
-	my @names = %toons.keys;
-
-	if !@names.end {
-		$input = %toons{@names[0]};
-	} else {
-		say "Please select the character to be used:\n";
-		for @names.kv -> $i, $n {
-			say "{ $i + 1 }: $n";
+	my $input = '';
+	my %toons = do for @options { 
+		if (%privateData<CHARACTER> // '') eq $_[0].text {
+			$input = $_<value>;
 		}
-		while 
-			!$input.chars 	|| 
-			$input ~~ /\D/ 	||
-			( $input.Int < 0 && $input.Int > @names.end ) 
-		{
-			$input = prompt "\nEnter your selection [or 0 to exit]: ";
-			say "Invalid selection! Please try again or enter 0 to quit"
-				if 
-					$input ~~ /\D/ && 
-					($input.Int < 0 && $input.Int > @names.end);
-			die "Exiting" if !$input.Int;
-			$input = %toons{@names[$input - 1]};
+		$_[0].text => $_<value> 
+	};
+	unless $input.chars {
+		my @names = %toons.keys;
+
+		if !@names.end {
+			$input = %toons{@names[0]};
+		} else {
+			say "Please select the character to be used:\n";
+			for @names.kv -> $i, $n {
+				say "{ $i + 1 }: $n";
+			}
+			while 
+				!$input.chars 	|| 
+				$input ~~ /\D/ 	||
+				( $input.Int < 0 && $input.Int > @names.end ) 
+			{
+				$input = prompt "\nEnter your selection [or 0 to exit]: ";
+				say "Invalid selection! Please try again or enter 0 to quit"
+					if 
+						$input ~~ /\D/ && 
+						($input.Int < 0 && $input.Int > @names.end);
+				die "Exiting" if !$input.Int;
+				$input = %toons{@names[$input - 1]};
+			}
 		}
 	}
+
+	@forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
+
+	my $formUrl = @forms[0]<action>;
+	unless $formUrl ~~ /^ 'http' s? '://' / {
+		# cw: Will more than likely work for EVE, but NOT a real solution.
+		$formUrl = "{ $prefix }{ $formUrl }";
+	}
+
+	my $form_data;
+	$form_data<CharacterId> = $input;
+	for @hidden_fields -> $hf {
+		$form_data{$hf<name>} = $hf<value>
+	}
+
+	say "Posting to $formUrl";
+	try {
+		$response = $postclient.post($formUrl, $form_data);
+	
+		CATCH {
+			when X::HTTP::Response {
+				# cw: This will be a redirect, but it needs to be a GET, not
+				#     a POST.
+
+				#     The problem here is that the cookes are MANGLED in the 
+				#     header.
+
+				my $broken_cookies = 
+					.response.header.field('Set-Cookie').values.
+					join(' ');
+				$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
+				my $g = Cookie_Grammar.parse($broken_cookies);
+
+				for @( $g<cookie> ) -> $c {
+					my $dts = $c<expires><value>.Str;
+					my $g = DateTime_Grammar.parse(
+						$dts, :actions(DateTime_Actions.new)
+					);
+					my $dt = $g.made;
+					$dts = '' unless $dt.defined;
+					next unless $dt > DateTime.now;
+					
+					my $cookie = HTTP::Cookie.new(
+						name 	=> $c<name>.Str,
+						value 	=> $c<value>.Str,
+						expires => $dts,
+						path	=> $c<path><value>.Str,
+						secure  => ($c<secure> // '').Str eq 'secure'
+					);
+					$client.cookies.push-cookie($cookie);
+					$postclient.cookies.push-cookie($cookie);
+				}
+				
+				# cw: Not optimal, but this should generally work for the servers
+				#     we connect to.
+				$url = .response.header.field('Location');
+				unless $url ~~ /^^ 'https://' / {
+					# cw: MUST be HTTPS at this point.
+					$url = "{ $prefix }{ $url }"
+				}
+			}
+		}
+	}
+
+	say "Redirecting to '$url'";
+	$content = '';
+	try {
+		CATCH {
+			when X::HTTP::NoResponse {
+				$response = .response;
+			}
+		}
+		if ! "outputRequest3".IO.e {
+			$response = $client.get($url);
+
+			die "HTTP request to '$url' failed!"
+				unless $response.is-success;
+
+			$content = $response.content;
+			my $fh = "outputRequest3".IO.open(:w);
+			$fh.print($content);
+			$fh.close;
+		} else {
+			$content = "outputRequest3".IO.slurp;
+		}
+	}
+
 }
 
-@forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
-$formUrl = @forms[0]<action>;
-unless $formUrl ~~ /^ 'http' s? '://' / {
-	# cw: Will more than likely work for EVE, but NOT a real solution.
-	$formUrl = "{ $prefix }{ $formUrl }";
-}
+# cw: Otherwise check for JSON.
+
+say $content if $content.defined;
 
