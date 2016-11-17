@@ -322,7 +322,6 @@ if (
 	}
 
 	say "Posting to $formUrl";
-	my $aspx_auth;
 	try {
 		$response = $postclient.post($formUrl, $form_data);
 	
@@ -340,13 +339,7 @@ if (
 				$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
 				my $g = Cookie_Grammar.parse($broken_cookies);
 
-				say "\n\n";
-				say $g;
-				say "\n\n";
-
-				my $i = 0;
 				for @( $g<cookie> ) -> $c {
-					say "======= {$i++} =======";
 					my $dts = $c<expires><value>.Str;
 					my $g = DateTime_Grammar.parse(
 						$dts, :actions(DateTime_Actions.new)
@@ -354,10 +347,7 @@ if (
 					my $dt = $g.made;
 					$dts = '' unless $dt.defined;
 					next unless $dt > DateTime.now;
-					say "Adding cookie { $c<name> }";
-					say "Path { $c<path><value>.Str }";
-					say "Date $dts";
-					say "Value: { ($c<value> // '').Str }";
+					
 					$client.cookies.push-cookie(HTTP::Cookie.new(
 						name 	=> $c<name>.Str,
 						value 	=> $c<value>.Str,
@@ -387,8 +377,6 @@ if (
 		}
 		$response = $client.get($url);
 	}
-	say "Final: { $response.header.field('Location') }"
-		if $response.header.field('Location').defined;
 	
 	die "Failed POST to '$formUrl'"
 		unless $response.is-success;
