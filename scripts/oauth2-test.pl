@@ -348,13 +348,15 @@ if (
 					$dts = '' unless $dt.defined;
 					next unless $dt > DateTime.now;
 					
-					$client.cookies.push-cookie(HTTP::Cookie.new(
+					my $cookie = HTTP::Cookie.new(
 						name 	=> $c<name>.Str,
 						value 	=> $c<value>.Str,
 						expires => $dts,
 						path	=> $c<path><value>.Str,
 						secure  => ($c<secure> // '').Str eq 'secure'
-					))
+					));
+					$client.cookies.push-cookie($cookie);
+					$postclient.cookies.push-cookie($cookie);
 				}
 				
 				# cw: Not optimal, but this should generally work for the servers
@@ -375,14 +377,22 @@ if (
 				$response = .response;
 			}
 		}
-		$response = $client.get($url);
+		if ! "outputRequest2".IO.e {
+			$response = $client.get($url);
+
+			die "HTTP request to '$url' failed!"
+				unless $response.is-success;
+
+			$content = $response.content;
+			my $fh = "outputRequest2".IO.open(:w);
+			$fh.print($content);
+			$fh.close;
+		} else {
+			$content = "outputRequest2".IO.slurp;
+		}
 	}
 	
-	die "Failed POST to '$formUrl'"
-		unless $response.is-success;
-
-	$content = $response.content;
-	say "Retrieved content:\n$content";
+	say "Retrieved content!";
 }
 
 
