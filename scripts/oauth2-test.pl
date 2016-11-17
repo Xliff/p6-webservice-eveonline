@@ -354,7 +354,7 @@ if (
 						expires => $dts,
 						path	=> $c<path><value>.Str,
 						secure  => ($c<secure> // '').Str eq 'secure'
-					));
+					);
 					$client.cookies.push-cookie($cookie);
 					$postclient.cookies.push-cookie($cookie);
 				}
@@ -395,4 +395,44 @@ if (
 	say "Retrieved content!";
 }
 
+$xmldoc = HTML::Parser::XML.new.parse($content);
+@fields = $xmldoc.elements(:TAG<option>, :RECURSE<100>);
+
+die "No characters exist on this account!\n"
+	unless @fields.elems;
+
+my $input = '';
+my %toons = do for @fields { 
+	if (%privateData<CHARACTER> // '') eq $_[0].text {
+		$input = $_<value>;
+	}
+	$_[0].text => $_<value> 
+};
+unless $input.chars {
+	my @names = %toons.keys;
+
+	if !@names.end {
+		$input = %toons{@names[0]};
+	} else {
+		say "Please select the character to be used:\n";
+		for @names.kv -> $i, $n {
+			say "{ $i + 1 }: $n";
+		}
+		while 
+			!$input.chars 	|| 
+			$input ~~ /\D/ 	||
+			( $input.Int < 0 && $input.Int > @names.end ) 
+		{
+			$input = prompt "\nEnter your selection [or 0 to exit]: ";
+			say "Invalid selection! Please try again or enter 0 to quit"
+				if 
+					$input ~~ /\D/ && 
+					($input.Int < 0 && $input.Int > @names.end);
+			die "Exiting" if !$input.Int;
+			$input = %toons{@names[$input - 1]};
+		}
+	}
+}
+
+say $input;
 
