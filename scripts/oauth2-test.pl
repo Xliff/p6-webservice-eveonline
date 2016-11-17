@@ -294,7 +294,9 @@ if ! "outputRequest1".IO.e {
 # First, check for login form.
 my $xmldoc = HTML::Parser::XML.new.parse($content);
 my @fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>);
-my %found;
+my @hidden_fields, %found;
+
+# cw: Should be a sub
 for @fields -> $f {
 	next unless $f<name>.defined;
 	%found{$f<name>} = 1;
@@ -391,11 +393,20 @@ if (
 			$content = "outputRequest2".IO.slurp;
 		}
 	}
-	
-	say "Retrieved content!";
+
+	%found = {};
+	$xmldoc = HTML::Parser::XML.new.parse($content);
+	@fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>);
+
+	# cw: Should be a sub
+	for @fields -> $f {
+		push @hidden_fields, $f if ($f<type> // '') eq 'hidden';
+		%found{$f<name>} = 1;
+	}
 }
 
-$xmldoc = HTML::Parser::XML.new.parse($content);
+# cw: Character selection should be wrapped in an if.
+
 @fields = $xmldoc.elements(:TAG<option>, :RECURSE<100>);
 
 die "No characters exist on this account!\n"
@@ -434,5 +445,10 @@ unless $input.chars {
 	}
 }
 
-say $input;
+@forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
+$formUrl = @forms[0]<action>;
+unless $formUrl ~~ /^ 'http' s? '://' / {
+	# cw: Will more than likely work for EVE, but NOT a real solution.
+	$formUrl = "{ $prefix }{ $formUrl }";
+}
 
