@@ -1,12 +1,165 @@
 use v6.c;
 
 use Base64;
-use LWP::Simple;
 use HTML::Parser::XML;
+use HTTP::UserAgent;
+use HTTP::Cookies;
 use HTTP::Server::Simple;
 use XML;
 
+#use Grammar::Tracer;
+
 constant TIMEOUT = 45;
+
+ grammar DateTime_Grammar {
+    token TOP {
+        <dt=rfc1123-date> | <dt=rfc850-date> | <dt=asctime-date>
+    }
+
+    token rfc1123-date {
+        <.wkday> ',' <.SP> <date=.date1> <.SP> <time> <.SP> 'GMT'
+    }
+
+    token rfc850-date {
+        #[ <weekday> || <wkday> ] ','? <SP> <date=date2> <SP> <time> <SP> 'GMT'
+        <wkday> ','? <SP> <date=date2> <SP> <time> <SP> 'GMT'
+    }
+
+    token asctime-date {
+        <.wkday> <.SP> <date=.date3> <.SP> <time> <.SP> <year=.D4-year>
+    }
+
+    token date1 { # e.g., 02 Jun 1982
+        <day=.D2> <.SP> <month> <.SP> <year=.D4-year>
+    }
+
+    token date2 { # e.g., 02-Jun-82 OR 02-Jun-1982
+        <day=.D2> '-' <month> '-' [ <year=.D4-year> || <year=.D2> ]
+    }
+
+    token date3 { # e.g., Jun  2
+        <month> <.SP> (<day=.D2> | <.SP> <day=.D1>)
+    }
+
+    token time {
+        <hour=.D2> ':' <minute=.D2> ':' <second=.D2>
+    }
+
+    token wkday {
+        'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
+    }
+
+    token weekday {
+        'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+    }
+
+    token month {
+        'Jan' | 'Feb' | 'Mar' | 'Apr' | 'May' | 'Jun' | 'Jul' | 'Aug' | 'Sep' | 'Oct' | 'Nov' | 'Dec'
+    }
+
+    token D4-year {
+        \d ** 4
+    }
+
+    token D2-year {
+        \d ** 2
+    }
+
+    token SP {
+        \s
+    }
+
+    token D1 {
+        \d
+    }
+
+    token D2 {
+        \d ** 2
+    }
+}
+
+class DateTime_Actions {
+    method TOP($/) {
+        make $<dt>.made
+    }
+
+    method rfc1123-date($/) {
+        make DateTime.new(|$<date>.made, |$<time>.made)
+    }
+
+    method rfc850-date($/) {
+        make DateTime.new(|$<date>.made, |$<time>.made)
+    }
+
+    method asctime-date($/) {
+        make DateTime.new(:year($<year>.made), |$<date>.made, |$<time>.made)
+    }
+
+    method date1($/) { # e.g., 02 Jun 1982
+        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
+    }
+
+    method date2($/) { # e.g., 02-Jun-82
+        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
+    }
+
+    method date3($/) { # e.g., Jun  2
+        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
+    }
+
+    method time($/) {
+        make { hour => +$<hour>, minute => +$<minute>, second => +$<second> }
+    }
+
+    my %wkday = Mon => 0, Tue => 1, Wed => 2, Thu => 3, Fri => 4, Sat => 5, Sun => 6;
+    method wkday($/) {
+        make %wkday{~$/}
+    }
+
+    my %weekday = Monday => 0, Tuesday => 1, Wednesday => 2, Thursday => 3,
+                  Friday => 4, Saturday => 5, Sunday => 6;
+    method weekday($/) {
+        make %weekday{~$/}
+    }
+
+    my %month = Jan => 1, Feb => 2, Mar => 3, Apr =>  4, May =>  5, Jun =>  6,
+                Jul => 7, Aug => 8, Sep => 9, Oct => 10, Nov => 11, Dec => 12;
+    method month($/) {
+        make %month{~$/}
+    }
+
+    method D4-year($/) {
+        make +$/
+    }
+
+    method D2-year($/) {
+        my $yy = +$/;
+        make $yy < 34 ?? 2000 + $yy !! 1900 + $yy
+    }
+
+    method D2($/) {
+        make +$/
+    }
+}
+
+
+my grammar Cookie_Grammar {
+    regex TOP {
+        [\s* <cookie> ','?]*
+    }
+
+    regex cookie   {
+        <name> '=' <value>? ';'? \s* <expires> \s* <path> \s* <secure>? ';'? \s* <httponly>? ';'?
+    }
+    token separator { <[()<>@,;:\"/\[\]?={}\s\t]> }
+    token name     { <[\S] - [()<>@,;:\"/\[\]?={}]>+ }
+    token value    { <-[;]>+ }
+    token expires  { 'expires=' <value> ';' }
+    token path     { 'path=' <value> ';' }
+    token arg      { <name> '=' <value> ';'? }
+    token secure   { :i Secure }
+    token httponly { :i HttpOnly }
+}
 
 # class TestOauth does HTTP::Server::Simple {
 # 	has %!header;
@@ -112,25 +265,28 @@ my $p = prepParams([
 #  	$www.run;
 # }
 
-# cw: Using LWP::Simple for SSL support.
-
-my $url = "https://login.eveonline.com/oauth/authorize?{ $p }";
-my $client = LWP::Simple.new;
+my $prefix = "https://login.eveonline.com/";
+my $url = "{ $prefix }oauth/authorize?{ $p }";
+my $postclient = HTTP::UserAgent.new(:max-redirects(0));
+my $client = HTTP::UserAgent.new;
+my $response;
 my $content;
 
 say $url;
 
-if ! "outputRequest".IO.e {
-	# cw: -XXX XXX- Bug in LWP::Simple screws up the redirect. Must fix.
-	$content = $client.get($url);
-	my $fh = "outputRequest".IO.open(:w);
+if ! "outputRequest1".IO.e {
+	$response = $client.get($url);
+
+	die "HTTP request to '$url' failed!"
+		unless $response.is-success;
+
+	$content = $response.content;
+	my $fh = "outputRequest1".IO.open(:w);
 	$fh.print($content);
 	$fh.close;
 } else {
-	$content = "outputRequest".IO.slurp;
+	$content = "outputRequest1".IO.slurp;
 }
-
-
 
 # cw: Now here is the tricky part. We need to look at the contents to see what
 #     POST request we send, next. 
@@ -144,6 +300,7 @@ for @fields -> $f {
 	%found{$f<name>} = 1;
 }
 
+my @forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
 if (
 	%found<UserName> 			&& 
 	%found<Password> 			&&
@@ -151,11 +308,93 @@ if (
 	%found<ClientIdentifier>;
 ) {
 	# Send login data and get request.
+	my $form_data = {
+	 	ClientIdentifier 	=> %privateData<client_id>,
+	 	UserName 			=> %privateData<username>,
+	 	Password			=> %privateData<password>,
+	 	RememberMe			=> 'false'
+	};
 
-my $formBody = prepParms([
- 	[ 'ClientIdentifier', 	%privateData<client_id> ],
- 	[ 'UserName',		 	%privateData<username>  ],
- 	[ 'Password',			%privateData<password>  ],
- 	[ 'RememberMe', 		false					]
-]);
+	my $formUrl = @forms[0]<action>;
+	unless $formUrl ~~ /^ 'http' s? '://' / {
+		# cw: Will more than likely work for EVE, but NOT a real solution.
+		$formUrl = "{ $prefix }{ $formUrl }";
+	}
+
+	say "Posting to $formUrl";
+	my $aspx_auth;
+	try {
+		$response = $postclient.post($formUrl, $form_data);
+	
+		CATCH {
+			when X::HTTP::Response {
+				# cw: This will be a redirect, but it needs to be a GET, not
+				#     a POST.
+
+				#     The problem here is that the cookes are MANGLED in the 
+				#     header.
+
+				my $broken_cookies = 
+					.response.header.field('Set-Cookie').values.
+					join(' ');
+				$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
+				my $g = Cookie_Grammar.parse($broken_cookies);
+
+				say "\n\n";
+				say $g;
+				say "\n\n";
+
+				my $i = 0;
+				for @( $g<cookie> ) -> $c {
+					say "======= {$i++} =======";
+					my $dts = $c<expires><value>.Str;
+					my $g = DateTime_Grammar.parse(
+						$dts, :actions(DateTime_Actions.new)
+					);
+					my $dt = $g.made;
+					$dts = '' unless $dt.defined;
+					next unless $dt > DateTime.now;
+					say "Adding cookie { $c<name> }";
+					say "Path { $c<path><value>.Str }";
+					say "Date $dts";
+					say "Value: { ($c<value> // '').Str }";
+					$client.cookies.push-cookie(HTTP::Cookie.new(
+						name 	=> $c<name>.Str,
+						value 	=> $c<value>.Str,
+						expires => $dts,
+						path	=> $c<path><value>.Str,
+						secure  => ($c<secure> // '').Str eq 'secure'
+					))
+				}
+				
+				# cw: Not optimal, but this should generally work for the servers
+				#     we connect to.
+				$url = .response.header.field('Location');
+				unless $url ~~ /^^ 'https://' / {
+					# cw: MUST be HTTPS at this point.
+					$url = "{ $prefix }{ $url }"
+				}
+			}
+		}
+	}
+
+	say "Redirecting to '$url'";
+	try {
+		CATCH {
+			when X::HTTP::NoResponse {
+				$response = .response;
+			}
+		}
+		$response = $client.get($url);
+	}
+	say "Final: { $response.header.field('Location') }"
+		if $response.header.field('Location').defined;
+	
+	die "Failed POST to '$formUrl'"
+		unless $response.is-success;
+
+	$content = $response.content;
+	say "Retrieved content:\n$content";
+}
+
 
