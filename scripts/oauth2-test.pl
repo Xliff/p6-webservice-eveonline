@@ -1,6 +1,7 @@
 use v6.c;
 
 use Base64;
+use DateTime::Parse;
 use HTML::Parser::XML;
 use HTTP::UserAgent;
 use HTTP::Cookies;
@@ -8,137 +9,6 @@ use XML;
 
 #use LWP::Simple;
 #use Grammar::Tracer;
-
-grammar DateTime_Grammar {
-    token TOP {
-        <dt=rfc1123-date> | <dt=rfc850-date> | <dt=asctime-date>
-    }
-
-    token rfc1123-date {
-        <.wkday> ',' <.SP> <date=.date1> <.SP> <time> <.SP> 'GMT'
-    }
-
-    token rfc850-date {
-        <wkday> ','? <SP> <date=date2> <SP> <time> <SP> 'GMT'
-    }
-
-    token asctime-date {
-        <.wkday> <.SP> <date=.date3> <.SP> <time> <.SP> <year=.D4-year>
-    }
-
-    token date1 { # e.g., 02 Jun 1982
-        <day=.D2> <.SP> <month> <.SP> <year=.D4-year>
-    }
-
-    token date2 { # e.g., 02-Jun-82 OR 02-Jun-1982
-        <day=.D2> '-' <month> '-' [ <year=.D4-year> || <year=.D2> ]
-    }
-
-    token date3 { # e.g., Jun  2
-        <month> <.SP> (<day=.D2> | <.SP> <day=.D1>)
-    }
-
-    token time {
-        <hour=.D2> ':' <minute=.D2> ':' <second=.D2>
-    }
-
-    token wkday {
-        'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
-    }
-
-    token weekday {
-        'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
-    }
-
-    token month {
-        'Jan' | 'Feb' | 'Mar' | 'Apr' | 'May' | 'Jun' | 'Jul' | 'Aug' | 'Sep' | 'Oct' | 'Nov' | 'Dec'
-    }
-
-    token D4-year {
-        \d ** 4
-    }
-
-    token D2-year {
-        \d ** 2
-    }
-
-    token SP {
-        \s
-    }
-
-    token D1 {
-        \d
-    }
-
-    token D2 {
-        \d ** 2
-    }
-}
-
-class DateTime_Actions {
-    method TOP($/) {
-        make $<dt>.made
-    }
-
-    method rfc1123-date($/) {
-        make DateTime.new(|$<date>.made, |$<time>.made)
-    }
-
-    method rfc850-date($/) {
-        make DateTime.new(|$<date>.made, |$<time>.made)
-    }
-
-    method asctime-date($/) {
-        make DateTime.new(:year($<year>.made), |$<date>.made, |$<time>.made)
-    }
-
-    method date1($/) { # e.g., 02 Jun 1982
-        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
-    }
-
-    method date2($/) { # e.g., 02-Jun-82
-        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
-    }
-
-    method date3($/) { # e.g., Jun  2
-        make { year => $<year>.made, month => $<month>.made, day => $<day>.made }
-    }
-
-    method time($/) {
-        make { hour => +$<hour>, minute => +$<minute>, second => +$<second> }
-    }
-
-    my %wkday = Mon => 0, Tue => 1, Wed => 2, Thu => 3, Fri => 4, Sat => 5, Sun => 6;
-    method wkday($/) {
-        make %wkday{~$/}
-    }
-
-    my %weekday = Monday => 0, Tuesday => 1, Wednesday => 2, Thursday => 3,
-                  Friday => 4, Saturday => 5, Sunday => 6;
-    method weekday($/) {
-        make %weekday{~$/}
-    }
-
-    my %month = Jan => 1, Feb => 2, Mar => 3, Apr =>  4, May =>  5, Jun =>  6,
-                Jul => 7, Aug => 8, Sep => 9, Oct => 10, Nov => 11, Dec => 12;
-    method month($/) {
-        make %month{~$/}
-    }
-
-    method D4-year($/) {
-        make +$/
-    }
-
-    method D2-year($/) {
-        my $yy = +$/;
-        make $yy < 34 ?? 2000 + $yy !! 1900 + $yy
-    }
-
-    method D2($/) {
-        make +$/
-    }
-}
-
 
 my grammar Cookie_Grammar {
     regex TOP {
@@ -194,20 +64,18 @@ sub getCookies($r) {
 	for @( $g<cookie> ) -> $c {
 		my $dts = (cookieExtraVal($c, 'expires') // '').Str;
 		if $dts.chars {
-			my $g = DateTime_Grammar.parse(
-				$dts, :actions(DateTime_Actions.new)
-			);
-			my $dt = $g.made;
-			$dts = '' unless $dt.defined;
-			next unless $dt > DateTime.now;
+			my $dt = DateTime::Parse.new($dts);
+			if $dt.defined {
+				next unless $dt > DateTime.now;
+			}
 		}
 		
 		@cookies.push(HTTP::Cookie.new(
 			name 		=> $c<name>.Str,
-			value 		=> $c<value>.Str,
-			expires 	=> $dts,
-			path		=> (cookieExtraVal($c, 'path') // '' ).Str,
-			secure  	=> (cookieExtra($c, 'secure') // '').Str.lc eq 'secure',
+			value 		=> ($c<value> // '').Str,
+			expires 	=> ($dts // ''),
+			path		=> (cookieExtraVal($c, 'path')  // '').Str,
+			secure  	=> (cookieExtra($c, 'secure')   // '').Str.lc eq 'secure',
 			httponly 	=> (cookieExtra($c, 'httponly') // '').Str.lc eq 'httponly'
 		));
 	}
@@ -454,31 +322,8 @@ if %found<CharacterId> {
 		#	say "Header: $k => $respHash{$k}";
 		#}
 
-		my $broken_cookies = 
-			$response.header.field('Set-Cookie').values.
-			join(' ');
-		$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
-		my $g = Cookie_Grammar.parse($broken_cookies);
-
-		for @( $g<cookie> // () ) -> $c {
-			my $dts = $c<expires><value>.Str;
-			my $g = DateTime_Grammar.parse(
-				$dts, :actions(DateTime_Actions.new)
-			);
-			my $dt = $g.made;
-			$dts = '' unless $dt.defined;
-			next unless $dt > DateTime.now;
-
-			# cw: Throw behind DEBUG parameter
-			#say "Cookie: $c<name> = $c<value>";
-			
-			my $cookie = HTTP::Cookie.new(
-				name 	=> $c<name>.Str,
-				value 	=> $c<value>.Str,
-				expires => $dts,
-				path	=> $c<path><value>.Str,
-				secure  => ($c<secure> // '').Str eq 'secure'
-			);
+		my @cookies = getCookies($response);
+		for @cookies -> $cookie {
 			$client.cookies.push-cookie($cookie);
 			$postclient.cookies.push-cookie($cookie);
 		}
@@ -558,6 +403,6 @@ $response = $postclient.post(
 	:Authorization("Basic $basic"),
 );
 if $response.is-success {
-	say "Token successfully retrieved!\n\n";
+	say "\n===== Token successfully retrieved! =====\n";
 	say $response.content;
 }
