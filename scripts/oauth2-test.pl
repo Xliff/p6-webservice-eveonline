@@ -289,7 +289,7 @@ if ".privateData".IO.e {
 die "Missing required private parameters"
 	unless 
 		%privateData<client_id>.defined &&
-		#%privateData<secret_id>.defined &&
+		%privateData<secret_id>.defined &&
 		%privateData<username>.defined  &&
 		%privateData<password>.defined;
 
@@ -610,4 +610,22 @@ if $tokenCode.defined {
 		$fh.cookies.close;
 		exit;
 	}
+}
+
+my $basic = encode-base64(
+	"{ %privateData<client_id> }:{ %privateData<secret_id> }", :str
+);
+my $form_data = {
+	grant_type	=> 'authorization_code',
+	code 		=> $tokenCode, 
+};
+
+$response = $postclient.post(
+	"{ $prefix }/oauth/token", 
+	$form_data, 
+	:Authorization("Basic $basic"),
+);
+if $response.is-success {
+	say "Token successfully retrieved!\n\n";
+	say $response.content;
 }
