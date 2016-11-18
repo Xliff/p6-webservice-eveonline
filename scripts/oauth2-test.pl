@@ -4,15 +4,12 @@ use Base64;
 use HTML::Parser::XML;
 use HTTP::UserAgent;
 use HTTP::Cookies;
-use HTTP::Server::Simple;
 use XML;
 
 #use LWP::Simple;
 #use Grammar::Tracer;
 
-constant TIMEOUT = 45;
-
- grammar DateTime_Grammar {
+grammar DateTime_Grammar {
     token TOP {
         <dt=rfc1123-date> | <dt=rfc850-date> | <dt=asctime-date>
     }
@@ -22,7 +19,6 @@ constant TIMEOUT = 45;
     }
 
     token rfc850-date {
-        #[ <weekday> || <wkday> ] ','? <SP> <date=date2> <SP> <time> <SP> 'GMT'
         <wkday> ','? <SP> <date=date2> <SP> <time> <SP> 'GMT'
     }
 
@@ -167,52 +163,6 @@ my grammar Cookie_Grammar {
     token httponly { :i HttpOnly ';'? }
 }
 
-# class TestOauth does HTTP::Server::Simple {
-# 	has %!header;
-# 	has $!path;
-# 	has $!query_string;
-# 	has $!supplier;
-# 	has $!state;
-
-# 	method new($supplier, $state, $port) {
-# 		self.bless(:$supplier, :$state, :$port);
-# 	}
-
-# 	submethod BUILD(:$supplier, :$state, :$port) {
-# 		$!supplier = $supplier;
-# 		$!state = $state;
-# 		$!port = $port;
-# 		$!host = self.lookup_localhost;
-# 	}
-
-# 	method setup(:$path, :$query_string) {
-# 		$!path = $path;
-# 		$!query_string = $query_string;
-# 	}
-
-# 	method header($key, $value) {
-# 		%!header{$key} = $value;
-# 	}
-
-# 	method handle_request() {
-# 		callsame;
-
-# 		# cw: Send to channel only if we're relatively sure it is the 
-# 		#     response we are looking for.
-# 		my $s = $!state;
-# 		if $!query_string ~~ /$s/ {
-# 			$!supplier.emit($!query_string);
-# 			self.stop;
-# 		}
-# 	}
-	
-# 	method stop() {
-# 		# cw: XXX - Didn't work, so will have to override net_server.
-# 		say "=== Attempting to stop server.";
-# 		$!listener.close;	
-# 	}
-# }
-
 sub urlEncode($s) {
 	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
 }
@@ -293,8 +243,6 @@ die "Missing required private parameters"
 		%privateData<username>.defined  &&
 		%privateData<password>.defined;
 
-# my $ipc = Supplier.new;
-# my $sup = $ipc.Supply;
 my $data;
 my $state;
 
@@ -321,19 +269,11 @@ my $response;
 my $content;
 
 say "Fetching $url";
+$response = $client.get($url);
 
-#if ! "outputRequest1".IO.e {
-	$response = $client.get($url);
+die "HTTP request to '$url' failed!" unless $response.is-success;
 
-	die "HTTP request to '$url' failed!" unless $response.is-success;
-
-	$content = $response.content;
-	#my $fh = "outputRequest1".IO.open(:w);
-	#$fh.print($content);
-	#$fh.close;
-#} else {
-#	$content = "outputRequest1".IO.slurp;
-#}
+$content = $response.content;
 
 # cw: Now here is the tricky part. We need to look at the contents to see what
 #     POST request we send, next. 
@@ -413,19 +353,11 @@ if (
 			}
 		}
 
-		#if ! "outputRequest2".IO.e {
-			$response = $client.get($url);
+		$response = $client.get($url);
 
-			die "HTTP request to '$url' failed!"
-				unless $response.is-success;
+		die "HTTP request to '$url' failed!" unless $response.is-success;
 
-			$content = $response.content;
-			my $fh = "outputRequest2".IO.open(:w);
-			$fh.print($content);
-			$fh.close;
-		#} else {
-		#	$content = "outputRequest2".IO.slurp;
-		#}
+		$content = $response.content;
 	}
 
 	my @cookies = getCookies($response);
