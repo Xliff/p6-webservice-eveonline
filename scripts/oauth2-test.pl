@@ -7,7 +7,8 @@ use HTTP::Cookies;
 use HTTP::Server::Simple;
 use XML;
 
-#use Grammar::Tracer;
+#use LWP::Simple;
+use Grammar::Tracer;
 
 constant TIMEOUT = 45;
 
@@ -145,20 +146,25 @@ class DateTime_Actions {
 
 my grammar Cookie_Grammar {
     regex TOP {
-        [\s* <cookie> ','?]*
+        [\s* <cookie> ',' ?]*
     }
 
     regex cookie   {
-        <name> '=' <value>? ';'? \s* <expires> \s* <path> \s* <secure>? ';'? \s* <httponly>? ';'?
+        <name> '=' <value>? ';'? \s* <extras>*
     }
+    token extras {
+    	\s* [ 
+    		<expires> || <path> || <secure> || <httponly>
+		] ';'?
+	}
     token separator { <[()<>@,;:\"/\[\]?={}\s\t]> }
     token name     { <[\S] - [()<>@,;:\"/\[\]?={}]>+ }
     token value    { <-[;]>+ }
     token expires  { 'expires=' <value> ';' }
     token path     { 'path=' <value> ';' }
     token arg      { <name> '=' <value> ';'? }
-    token secure   { :i Secure }
-    token httponly { :i HttpOnly }
+    token secure   { :i Secure ';'? }
+    token httponly { :i HttpOnly ';'? }
 }
 
 # class TestOauth does HTTP::Server::Simple {
@@ -215,6 +221,55 @@ sub prepParams($l) {
 	$l.map({ $_[1] = urlEncode($_[1]); $_.join('='); }).join('&');
 }
 
+sub cookieExtra($c, $f) {
+	for $c<extras> -> $e {
+		if $e{$f}.defined {
+			say "Found $f";
+			return $e{$f};
+		}
+	}
+	Nil;
+}
+
+sub cookieExtraVal($c, $f) {
+	 my $k = cookieExtra($c, $f);
+	 $k.defined ?? $k<value> !! Nil;
+}
+
+sub getCookies($r) {
+	my @cookies;
+	my $broken_cookies = 
+		$r.header.field('Set-Cookie').values.
+		join(' ');
+	$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
+	my $g = Cookie_Grammar.parse($broken_cookies);
+
+	for @( $g<cookie> ) -> $c {
+		say $c.Str;
+
+		my $dts = (cookieExtraVal($c, 'expires') // '').Str;
+		if $dts.chars {
+			my $g = DateTime_Grammar.parse(
+				$dts, :actions(DateTime_Actions.new)
+			);
+			my $dt = $g.made;
+			$dts = '' unless $dt.defined;
+			next unless $dt > DateTime.now;
+		}
+		
+		@cookies.push(HTTP::Cookie.new(
+			name 		=> $c<name>.Str,
+			value 		=> $c<value>.Str,
+			expires 	=> $dts,
+			path		=> (cookieExtraVal($c, 'path') // '' ).Str,
+			secure  	=> (cookieExtra($c, 'secure') // '').Str.lc eq 'secure',
+			httponly 	=> (cookieExtra($c, 'httponly') // '').Str.lc eq 'httponly'
+		));
+	}
+
+	@cookies;
+}
+
 my %privateData;
 if ".privateData".IO.e {
 	my $contents = ".privateData".IO.slurp;
@@ -257,25 +312,30 @@ my $p = prepParams([
 
 my $prefix = "https://login.eveonline.com/";
 my $url = "{ $prefix }oauth/authorize?{ $p }";
-my $postclient = HTTP::UserAgent.new(:max-redirects(0));
-my $client = HTTP::UserAgent.new;
+my $client = HTTP::UserAgent.new(
+	:max-redirects(5), :useragent<WebService::Eve v0.0.1>
+);
+my $postclient = HTTP::UserAgent.new(
+	:max-redirects(0), 
+	:useragent<WebService::Eve v0.0.1>
+);
 my $response;
 my $content;
 
 say "Fetching $url";
 
-if ! "outputRequest1".IO.e {
+#if ! "outputRequest1".IO.e {
 	$response = $client.get($url);
 
 	die "HTTP request to '$url' failed!" unless $response.is-success;
 
 	$content = $response.content;
-	my $fh = "outputRequest1".IO.open(:w);
-	$fh.print($content);
-	$fh.close;
-} else {
-	$content = "outputRequest1".IO.slurp;
-}
+	#my $fh = "outputRequest1".IO.open(:w);
+	#$fh.print($content);
+	#$fh.close;
+#} else {
+#	$content = "outputRequest1".IO.slurp;
+#}
 
 # cw: Now here is the tricky part. We need to look at the contents to see what
 #     POST request we send, next. 
@@ -318,50 +378,32 @@ if (
 
 	say "Posting to $formUrl";
 	try {
+		# cw: This doesn't seem to follow the same pattern as the last 
+		#     request. There may not be an exception, here.
+		CATCH {
+			when X::HTTP::Response { .resume }
+		}
+
 		$response = $postclient.post($formUrl, $form_data);
 	
-		CATCH {
-			when X::HTTP::Response {
-				# cw: This will be a redirect, but it needs to be a GET, not
-				#     a POST.
+		# cw: This will be a redirect, but it needs to be a GET, not
+		#     a POST.
 
-				#     The problem here is that the cookes are MANGLED in the 
-				#     header.
+		#     The problem here is that the cookes are MANGLED in the 
+		#     header.
 
-				my $broken_cookies = 
-					.response.header.field('Set-Cookie').values.
-					join(' ');
-				$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
-				my $g = Cookie_Grammar.parse($broken_cookies);
-
-				for @( $g<cookie> ) -> $c {
-					my $dts = $c<expires><value>.Str;
-					my $g = DateTime_Grammar.parse(
-						$dts, :actions(DateTime_Actions.new)
-					);
-					my $dt = $g.made;
-					$dts = '' unless $dt.defined;
-					next unless $dt > DateTime.now;
-					
-					my $cookie = HTTP::Cookie.new(
-						name 	=> $c<name>.Str,
-						value 	=> $c<value>.Str,
-						expires => $dts,
-						path	=> $c<path><value>.Str,
-						secure  => ($c<secure> // '').Str eq 'secure'
-					);
-					$client.cookies.push-cookie($cookie);
-					$postclient.cookies.push-cookie($cookie);
-				}
-				
-				# cw: Not optimal, but this should generally work for the servers
-				#     we connect to.
-				$url = .response.header.field('Location');
-				unless $url ~~ /^^ 'https://' / {
-					# cw: MUST be HTTPS at this point.
-					$url = "{ $prefix }{ $url }"
-				}
-			}
+		my @cookies = getCookies($response);
+		for @cookies -> $c {
+			$client.cookies.push-cookie($c);
+			$postclient.cookies.push-cookie($c);
+		}
+		
+		# cw: Not optimal, but this should generally work for the servers
+		#     we connect to.
+		$url = $response.header.field('Location');
+		unless $url ~~ /^^ 'https://' / {
+			# cw: MUST be HTTPS at this point.
+			$url = "{ $prefix }{ $url }"
 		}
 	}
 
@@ -372,7 +414,8 @@ if (
 				$response = .response;
 			}
 		}
-		if ! "outputRequest2".IO.e {
+
+		#if ! "outputRequest2".IO.e {
 			$response = $client.get($url);
 
 			die "HTTP request to '$url' failed!"
@@ -382,9 +425,15 @@ if (
 			my $fh = "outputRequest2".IO.open(:w);
 			$fh.print($content);
 			$fh.close;
-		} else {
-			$content = "outputRequest2".IO.slurp;
-		}
+		#} else {
+		#	$content = "outputRequest2".IO.slurp;
+		#}
+	}
+
+	my @cookies = getCookies($response);
+	for @cookies -> $c {
+		$client.cookies.push-cookie($c);
+		$postclient.cookies.push-cookie($c);
 	}
 
 	%found = ();
@@ -449,85 +498,99 @@ if %found<CharacterId> {
 
 	my $form_data;
 	$form_data<CharacterId> = $input;
+	$form_data<action> = 'Authorize';
 	for @hidden_fields -> $hf {
-		$form_data{$hf<name>} = $hf<value>
+		$form_data{$hf<name>} = $hf<value>;
 	}
 
 	say "Posting to $formUrl";
 	try {
+		CATCH {
+			when X::HTTP::Response { .resume }
+		}
+
 		$response = $postclient.post($formUrl, $form_data);
 	
-		CATCH {
-			when X::HTTP::Response {
-				# cw: This will be a redirect, but it needs to be a GET, not
-				#     a POST.
+		# cw: This will be a redirect, but it needs to be a GET, not
+		#     a POST.
 
-				#     The problem here is that the cookes are MANGLED in the 
-				#     header.
+		#     The problem here is that the cookes are MANGLED in the 
+		#     header.
 
-				my $broken_cookies = 
-					.response.header.field('Set-Cookie').values.
-					join(' ');
-				$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
-				my $g = Cookie_Grammar.parse($broken_cookies);
-
-				for @( $g<cookie> ) -> $c {
-					my $dts = $c<expires><value>.Str;
-					my $g = DateTime_Grammar.parse(
-						$dts, :actions(DateTime_Actions.new)
-					);
-					my $dt = $g.made;
-					$dts = '' unless $dt.defined;
-					next unless $dt > DateTime.now;
-					
-					my $cookie = HTTP::Cookie.new(
-						name 	=> $c<name>.Str,
-						value 	=> $c<value>.Str,
-						expires => $dts,
-						path	=> $c<path><value>.Str,
-						secure  => ($c<secure> // '').Str eq 'secure'
-					);
-					$client.cookies.push-cookie($cookie);
-					$postclient.cookies.push-cookie($cookie);
-				}
-				
-				# cw: Not optimal, but this should generally work for the servers
-				#     we connect to.
-				$url = .response.header.field('Location');
-				unless $url ~~ /^^ 'https://' / {
-					# cw: MUST be HTTPS at this point.
-					$url = "{ $prefix }{ $url }"
-				}
-			}
+		my $respHash = $response.header.hash;
+		for $respHash.keys -> $k {
+			say "Header: $k => $respHash{$k}";
 		}
+
+		my $broken_cookies = 
+			$response.header.field('Set-Cookie').values.
+			join(' ');
+		$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
+		my $g = Cookie_Grammar.parse($broken_cookies);
+
+		for @( $g<cookie> // () ) -> $c {
+			my $dts = $c<expires><value>.Str;
+			my $g = DateTime_Grammar.parse(
+				$dts, :actions(DateTime_Actions.new)
+			);
+			my $dt = $g.made;
+			$dts = '' unless $dt.defined;
+			next unless $dt > DateTime.now;
+
+			say "Cookie: $c<name> = $c<value>";
+			
+			my $cookie = HTTP::Cookie.new(
+				name 	=> $c<name>.Str,
+				value 	=> $c<value>.Str,
+				expires => $dts,
+				path	=> $c<path><value>.Str,
+				secure  => ($c<secure> // '').Str eq 'secure'
+			);
+			$client.cookies.push-cookie($cookie);
+			$postclient.cookies.push-cookie($cookie);
+		}
+		
+		# cw: Not optimal, but this should generally work for the servers
+		#     we connect to.
+		$url = '';
+		if $response.header.field('Location').defined {
+			$url = $response.header.field('Location');
+			unless $url ~~ /^^ 'https://' / {
+				# cw: MUST be HTTPS at this point.
+				$url = "{ $prefix }{ $url }"
+			}
+		} 
 	}
 
-	say "Redirecting to '$url'";
-	$content = '';
-	try {
-		CATCH {
-			when X::HTTP::NoResponse {
-				$response = .response;
+	if $url.chars {
+		say "Redirecting to '$url'";
+		$content = '';
+		try {
+			CATCH {
+				when X::HTTP::NoResponse {
+					$response = .response;
+				}
 			}
-		}
-		if ! "outputRequest3".IO.e {
-			$response = $client.get($url);
+			#if ! "outputRequest3".IO.e {
+				$response = $client.get($url);
 
-			die "HTTP request to '$url' failed!"
-				unless $response.is-success;
+				die "HTTP request to '$url' failed!"
+					unless $response.is-success;
 
-			$content = $response.content;
-			my $fh = "outputRequest3".IO.open(:w);
-			$fh.print($content);
-			$fh.close;
-		} else {
-			$content = "outputRequest3".IO.slurp;
+				$content = $response.content;
+				#my $fh = "outputRequest3".IO.open(:w);
+				#$fh.print($content);
+				#$fh.close;
+			#} else {
+			#	$content = "outputRequest3".IO.slurp;
+			#}
 		}
+	} else {
+		# cw: Previous post was a success.
+		$content = $response.content;
 	}
-
 }
 
 # cw: Otherwise check for JSON.
-
-say $content if $content.defined;
+say $content;
 
