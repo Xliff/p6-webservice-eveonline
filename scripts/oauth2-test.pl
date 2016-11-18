@@ -8,7 +8,7 @@ use HTTP::Server::Simple;
 use XML;
 
 #use LWP::Simple;
-use Grammar::Tracer;
+#use Grammar::Tracer;
 
 constant TIMEOUT = 45;
 
@@ -223,10 +223,7 @@ sub prepParams($l) {
 
 sub cookieExtra($c, $f) {
 	for $c<extras> -> $e {
-		if $e{$f}.defined {
-			say "Found $f";
-			return $e{$f};
-		}
+		return $e{$f} if $e{$f}.defined;
 	}
 	Nil;
 }
@@ -245,8 +242,6 @@ sub getCookies($r) {
 	my $g = Cookie_Grammar.parse($broken_cookies);
 
 	for @( $g<cookie> ) -> $c {
-		say $c.Str;
-
 		my $dts = (cookieExtraVal($c, 'expires') // '').Str;
 		if $dts.chars {
 			my $g = DateTime_Grammar.parse(
@@ -269,6 +264,9 @@ sub getCookies($r) {
 
 	@cookies;
 }
+
+my $tokenCode;
+my $bearerToken;
 
 my %privateData;
 if ".privateData".IO.e {
@@ -518,9 +516,11 @@ if %found<CharacterId> {
 		#     header.
 
 		my $respHash = $response.header.hash;
-		for $respHash.keys -> $k {
-			say "Header: $k => $respHash{$k}";
-		}
+
+		# cw: Throw behind DEBUG parameter.
+		#for $respHash.keys -> $k {
+		#	say "Header: $k => $respHash{$k}";
+		#}
 
 		my $broken_cookies = 
 			$response.header.field('Set-Cookie').values.
@@ -537,7 +537,8 @@ if %found<CharacterId> {
 			$dts = '' unless $dt.defined;
 			next unless $dt > DateTime.now;
 
-			say "Cookie: $c<name> = $c<value>";
+			# cw: Throw behind DEBUG parameter
+			#say "Cookie: $c<name> = $c<value>";
 			
 			my $cookie = HTTP::Cookie.new(
 				name 	=> $c<name>.Str,
@@ -554,15 +555,19 @@ if %found<CharacterId> {
 		#     we connect to.
 		$url = '';
 		if $response.header.field('Location').defined {
-			$url = $response.header.field('Location');
-			unless $url ~~ /^^ 'https://' / {
-				# cw: MUST be HTTPS at this point.
-				$url = "{ $prefix }{ $url }"
+			if $response.header.field('Location') ~~ / 'code=' (<-[ & ]>+) / {
+				$tokenCode = $/[0];
+			} else {
+				$url = $response.header.field('Location');
+				unless $url ~~ /^^ 'https://' / {
+					# cw: MUST be HTTPS at this point.
+					$url = "{ $prefix }{ $url }"
+				}
 			}
 		} 
 	}
 
-	if $url.chars {
+	if !$tokenCode.chars && $url.chars {
 		say "Redirecting to '$url'";
 		$content = '';
 		try {
@@ -591,6 +596,18 @@ if %found<CharacterId> {
 	}
 }
 
-# cw: Otherwise check for JSON.
-say $content;
+# cw: If $tokenCode is present, then we can FINALLY get the bearer token.
+#     Otherwise, we display content, if present.
 
+if $tokenCode.defined {
+	say "Code for bearer token is: $tokenCode";
+} else {
+	say "No code retrieved.";
+	if $content.chars {
+		say "Saved retrieved content in file ./outputRequest";
+		my $fh = "outputRequest".IO.open(:w);
+		$fh.print($content);
+		$fh.cookies.close;
+		exit;
+	}
+}
