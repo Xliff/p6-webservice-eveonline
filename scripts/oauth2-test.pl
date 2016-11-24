@@ -10,6 +10,7 @@ use XML;
 #use LWP::Simple;
 #use Grammar::Tracer;
 
+# cw: To be returned to HTTP::UserAgent, if possible.
 my grammar Cookie_Grammar {
     regex TOP {
         [\s* <cookie> ',' ?]*
@@ -26,13 +27,17 @@ my grammar Cookie_Grammar {
     token separator { <[()<>@,;:\"/\[\]?={}\s\t]> }
     token name     { <[\S] - [()<>@,;:\"/\[\]?={}]>+ }
     token value    { <-[;]>+ }
-    token expires  { 'expires=' <value> ';' }
+    token expires  { [ 'expires' || 'max-age' ] '=' <value> ';' } 
     token path     { 'path=' <value> ';' }
     token arg      { <name> '=' <value> ';'? }
     token secure   { :i Secure ';'? }
     token httponly { :i HttpOnly ';'? }
 }
 
+#############################################
+#
+# cw: Now in WebService::EveOnline::Utils
+# 
 sub urlEncode($s) {
 	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
 }
@@ -40,6 +45,7 @@ sub urlEncode($s) {
 sub prepParams($l) {
 	$l.map({ $_[1] = urlEncode($_[1]); $_.join('='); }).join('&');
 }
+#############################################
 
 sub cookieExtra($c, $f) {
 	for $c<extras> -> $e {
@@ -127,11 +133,11 @@ my $p = prepParams([
 my $prefix = "https://login.eveonline.com/";
 my $url = "{ $prefix }oauth/authorize?{ $p }";
 my $client = HTTP::UserAgent.new(
-	:max-redirects(5), :useragent<WebService::Eve v0.0.1>
+	:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
 );
 my $postclient = HTTP::UserAgent.new(
 	:max-redirects(0), 
-	:useragent<WebService::Eve v0.0.1>
+	:useragent<WebService::Eve v0.0.1 (rakudo)>
 );
 my $response;
 my $content;
@@ -191,15 +197,17 @@ if (
 		}
 
 		$response = $postclient.post($formUrl, $form_data);
-	
+		# cw: We've rolled our own until a fix can be made for HTTP::UserAgent
+		#     Probably has to do with early expiration or parsing in 
+		#     HTTP::Cookies.
+		my @cookies = getCookies($response);
+		
 		# cw: This will be a redirect, but it needs to be a GET, not
 		#     a POST.
-
-		#     The problem here is that the cookes are MANGLED in the 
-		#     header.
-
-		my @cookies = getCookies($response);
 		for @cookies -> $c {
+			# cw: Wrap in a DEBUG.
+			#say "Cookie { $c.name } expires '{ $c.expires }'";
+
 			$client.cookies.push-cookie($c);
 			$postclient.cookies.push-cookie($c);
 		}
@@ -211,6 +219,10 @@ if (
 			# cw: MUST be HTTPS at this point.
 			$url = "{ $prefix }{ $url }"
 		}
+
+		# cw: -YYY-
+		#     At this point, if URL has "/Account/LogOn" in it, then we've 
+		#     failed the authorization phase and should throw an exception.
 	}
 
 	say "Redirecting to '$url'";
