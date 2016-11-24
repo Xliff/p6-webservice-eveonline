@@ -45,7 +45,6 @@ sub urlEncode($s) {
 sub prepParams($l) {
 	$l.map({ $_[1] = urlEncode($_[1]); $_.join('='); }).join('&');
 }
-#############################################
 
 sub cookieExtra($c, $f) {
 	for $c<extras> -> $e {
@@ -88,6 +87,7 @@ sub getCookies($r) {
 
 	@cookies;
 }
+#############################################
 
 my $tokenCode;
 my $bearerToken;
@@ -122,7 +122,7 @@ my $state;
 
 # cw: Encode and assemble query string.
 my $p = prepParams([
-	#[ 'ReturnUrl', 		'/oauth/authorize' ],
+	#[ 'ReturnUrl', 	'/oauth/authorize' ],
 	[ 'response_type', 	'code' ],
 	[ 'redirect_uri', 	'http://localhost:8888/' ],
 	[ 'client_id', 		%privateData<client_id> ],
