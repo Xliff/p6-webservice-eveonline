@@ -4,6 +4,29 @@ use DateTime::Parse;
 use HTTP::UserAgent;
 use HTTP::Cookie;
 
+grammar Cookie_Grammar {
+    regex TOP {
+        [\s* <cookie> ',' ?]*
+    }
+
+    regex cookie   {
+        <name> '=' <value>? ';'? \s* <extras>*
+    }
+    token extras {
+    	\s* [ 
+    		<expires> || <path> || <secure> || <httponly>
+		] ';'?
+	}
+    token separator { <[()<>@,;:\"/\[\]?={}\s\t]> }
+    token name     { <[\S] - [()<>@,;:\"/\[\]?={}]>+ }
+    token value    { <-[;]>+ }
+    token expires  { [ 'expires' || 'max-age' ] '=' <value> ';' } 
+    token path     { 'path=' <value> ';' }
+    token arg      { <name> '=' <value> ';'? }
+    token secure   { :i Secure ';'? }
+    token httponly { :i HttpOnly ';'? }
+}
+
 sub urlEncode($s) is export {
 	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
 }

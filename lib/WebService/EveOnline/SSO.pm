@@ -11,9 +11,14 @@ class WebService::EveOnline::SSO {
 
 	use WebService::EveOnline::Utils;
 
+	# cw: Please note that there are places where I use backslash to quote 
+	#     characters in regexes. This is solely due to not screw up the 
+	#     syntactical highlighting in the editor I use for development.
+
+	has $!prefix;
 	has $!postclient;
 	has $!client;
-	has $!xmlDoc;
+	has $!xmldoc;
 	has %!fieldsInForm;
 	has %.privateData;
 	has $.tokenData;
@@ -34,9 +39,10 @@ class WebService::EveOnline::SSO {
 	method !getPrivateData {
 		# Override this to implement custom data retrieval method.
 		if ".privateData".IO.e {
-		my $contents = ".privateData".IO.slurp;
-		for $contents ~~ m:g/(\w+) \s* '=' \s* (\S+)/ -> $m {
-			%!privateData{$m[0].Str} = $m[1].Str;
+			my $contents = ".privateData".IO.slurp;
+			for $contents ~~ m:g/(\w+) \s* '=' \s* (\S+)/ -> $m {
+				%!privateData{$m[0].Str} = $m[1].Str;
+			}
 		}
 	}
 
@@ -46,7 +52,7 @@ class WebService::EveOnline::SSO {
 	}
 
 	method !handleLogin {
-		my @forms = $xmldoc.elements(:TAG<form>, :RECURSE(100));
+		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
 		my $form_data = {
 		 	ClientIdentifier 	=> %.privateData<client_id>,
 		 	UserName 			=> %.privateData<username>,
@@ -55,11 +61,13 @@ class WebService::EveOnline::SSO {
 		};
 
 		my $formUrl = @forms[0]<action>;
-		unless $formUrl ~~ /^ 'http' s? '://' / {
+		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
-			$formUrl = "{ $prefix }{ $formUrl }";
+			$formUrl = "{ $!prefix }{ $formUrl }";
 		}
 
+		my $url;
+		my $response;
 		try {
 			# cw: This doesn't seem to follow the same pattern as the last 
 			#     request. There may not be an exception, here.
@@ -86,9 +94,9 @@ class WebService::EveOnline::SSO {
 			# cw: Not optimal, but this should generally work for the servers
 			#     we connect to.
 			$url = $response.header.field('Location');
-			unless $url ~~ /^^ 'https://' / {
+			unless $url ~~ /^^ https\:\/\/ / {
 				# cw: MUST be HTTPS at this point.
-				$url = "{ $prefix }{ $url }"
+				$url = "{ $!prefix }{ $url }"
 			}
 
 			# cw: -YYY-
@@ -103,11 +111,9 @@ class WebService::EveOnline::SSO {
 				}
 			}
 
-			$response = $client.get($url);
+			$response = $!client.get($url);
 
 			die "HTTP request to '$url' failed!" unless $response.is-success;
-
-			$content = $response.content;
 		}
 
 		my @cookies = getCookies($response);
@@ -115,14 +121,92 @@ class WebService::EveOnline::SSO {
 			$!client.cookies.push-cookie($c);
 			$!postclient.cookies.push-cookie($c);
 		}
-		$!xmldoc = HTML::Parser::XML.new.parse($content);
-		@fields = $xmldoc.elements(:TAG<input>, :RECURSE<100>); 
-		@sel = $xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
-		%!fieldsInForm = ();
-		for |(@fields, @sel).flat -> $f {
-			next unless $f<name>.defined;
-			%!fieldsInForm{$f<name>} = 1;
+		$response;
+	}
+
+	method !handleCharSelect {
+		my $url;
+		my @options = $!xmldoc.elements(:TAG<option>, :RECURSE<100>);
+
+		die "No characters exist on this account!\n" unless @options.elems;
+
+		my $input = '';
+		my %toons = do for @options { 
+			if (%!privateData<CHARACTER> // '') eq $_[0].text {
+				$input = $_<value>;
+			}
+			$_[0].text => $_<value> 
+		};
+		unless $input.chars {
+			my @names = %toons.keys;
+
+			if !@names.end {
+				$input = %toons{@names[0]};
+			} else {
+				say "Please select the character to be used:\n";
+				for @names.kv -> $i, $n {
+					say "{ $i + 1 }: $n";
+				}
+				while 
+					!$input.chars 	|| 
+					$input ~~ /\D/ 	||
+					( $input.Int < 0 && $input.Int > @names.end ) 
+				{
+					$input = prompt "\nEnter your selection [or 0 to exit]: ";
+					say "Invalid selection! Please try again or enter 0 to quit"
+						if 
+							$input ~~ /\D/ && 
+							($input.Int < 0 && $input.Int > @names.end);
+					die "Exiting" if !$input.Int;
+					$input = %toons{@names[$input - 1]};
+				}
+			}
+		}
+
+		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
+		my $formUrl = @forms[0]<action>;
+		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
+			# cw: Will more than likely work for EVE, but NOT a real solution.
+			$formUrl = "{ $!prefix }{ $formUrl }";
+		}
+
+		my $form_data;
+		$form_data<CharacterId> = $input;
+		$form_data<action> = 'Authorize';
+		for @( $!xmldoc.elements(
+			:TAG<input>, :type<hidden>, :RECURSE(100)
+		) ) -> $hf {
+			$form_data{$hf<name>} = $hf<value>;
+		}
+
+		my $response;
+		say "Posting to $formUrl";
+		try {
+			CATCH {
+				when X::HTTP::Response { .resume }
+			}
+
+			$response = $!postclient.post($formUrl, $form_data);
+		
+			# cw: This will be a redirect, but it needs to be a GET, not
+			#     a POST.
+
+			#     The problem here is that the cookes are MANGLED in the 
+			#     header.
+
+			my $respHash = $response.header.hash;
+
+			# cw: Throw behind DEBUG parameter.
+			#for $respHash.keys -> $k {
+			#	say "Header: $k => $respHash{$k}";
+			#}
+
+			my @cookies = getCookies($response);
+			for @cookies -> $cookie {
+				$!client.cookies.push-cookie($cookie);
+				$!postclient.cookies.push-cookie($cookie);
+			}
 		}
 
 		$response;
@@ -139,29 +223,26 @@ class WebService::EveOnline::SSO {
 				%.privateData<username>.defined  &&
 				%.privateData<password>.defined;
 
-		my $redir = %privteData<redirect_uri> // 'http://localhost:8888/';
+		my $redir = %!privateData<redirect_uri> // "http://localhost:8888/";
 		my $p = prepParams([
-			#[ 'ReturnUrl', 	'/oauth/authorize' ],
 			[ 'response_type', 	'code' 					 ],
 			[ 'redirect_uri', 	$redir 					 ],
-			[ 'client_id', 		%privateData<client_id>  ],
+			[ 'client_id', 		%!privateData<client_id>  ],
 			[ 'scope', 			'characterFittingsRead'  ],
 			[ 'state',  		($state = self!getState) ]
 		]);
 
-		my $prefix = "https://login.eveonline.com/";
-		my $url = "{ $prefix }oauth/authorize?{ $p }";
+		$!prefix = "https://login.eveonline.com/";
+		my $url = "{ $!prefix }oauth/authorize?{ $p }";
 		my $response;
-		my $content;
 
-		$response = $client.get($url);
+		$response = $!client.get($url);
 		# cw: Should throw an exception, instead.
-		die "HTTP request to '$url' failed!" unless $response.is-success;	
-		$content = $response.content;
+		die "HTTP request to '$url' failed!" unless $response.is-success;
 
 		my $tokenCode;
 				
-		my $!xmldoc = HTML::Parser::XML.new.parse($content);
+		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
 		my @fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>); 
 		my @sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
@@ -177,13 +258,23 @@ class WebService::EveOnline::SSO {
 				%!fieldsInForm<RememberMe>			&&
 				%!fieldsInForm<ClientIdentifier>;
 		
+		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
+		@fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>); 
+		@sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
+
+		%!fieldsInForm = ();
+		for |(@fields, @sel).flat -> $f {
+			next unless $f<name>.defined;
+			%!fieldsInForm{$f<name>} = 1;
+		}
+
 		$response = self!handleCharSelect 
 			if %!fieldsInForm<CharacterId>;
 
 		# At this point, the redirect should contain a code parameter. 
 		# Search for it.
 		my $loc = $response.header.field('Location') // '';
-		if $loc ~~ / 'code=' (<-[ & ]>+) / {
+		if $loc ~~ / code\= (<-[ & ]>+) / {
 			$tokenCode = $/[0];
 		}
 
@@ -192,15 +283,15 @@ class WebService::EveOnline::SSO {
 			unless $tokenCode.chars;
 
 		my $basic = encode-base64(
-			"{ %privateData<client_id> }:{ %privateData<secret_id> }", :str
+			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
 		);
 		my $form_data = {
 			grant_type	=> 'authorization_code',
 			code 		=> $tokenCode, 
 		};
 
-		$response = $postclient.post(
-			"{ $prefix }/oauth/token", 
+		$response = $!postclient.post(
+			"{ $!prefix }/oauth/token", 
 			$form_data, 
 			:Authorization("Basic $basic"),
 		);
