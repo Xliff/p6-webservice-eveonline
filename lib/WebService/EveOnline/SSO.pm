@@ -274,7 +274,7 @@ class WebService::EveOnline::SSO {
 		# Search for it.
 		my $loc = $response.header.field('Location') // '';
 		if $loc ~~ / code\= (<-[ & ]>+) / {
-			$tokenCode = $/[0];
+			$tokenCode = $/[0].Str;
 		}
 
 		# cw: Should be an exception
