@@ -15,7 +15,8 @@ class WebService::EveOnline::SSO {
 	#     characters in regexes. This is solely due to not screw up the 
 	#     syntactical highlighting in the editor I use for development.
 
-	has $!prefix;
+	constant PREFIX = "https://login.eveonline.com/";
+
 	has $!postclient;
 	has $!client;
 	has $!xmldoc;
@@ -23,7 +24,7 @@ class WebService::EveOnline::SSO {
 	has %.privateData;
 	has $.tokenData;
 
-	submethod BUILD {
+	submethod BUILD() {
 		$!client = HTTP::UserAgent.new(
 			:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
 		);
@@ -63,7 +64,7 @@ class WebService::EveOnline::SSO {
 		my $formUrl = @forms[0]<action>;
 		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
-			$formUrl = "{ $!prefix }{ $formUrl }";
+			$formUrl = "{ PREFIX }{ $formUrl }";
 		}
 
 		my $url;
@@ -96,7 +97,7 @@ class WebService::EveOnline::SSO {
 			$url = $response.header.field('Location');
 			unless $url ~~ /^^ https\:\/\/ / {
 				# cw: MUST be HTTPS at this point.
-				$url = "{ $!prefix }{ $url }"
+				$url = "{ PREFIX }{ $url }"
 			}
 
 			# cw: -YYY-
@@ -168,7 +169,7 @@ class WebService::EveOnline::SSO {
 		my $formUrl = @forms[0]<action>;
 		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
-			$formUrl = "{ $!prefix }{ $formUrl }";
+			$formUrl = "{ PREFIX }{ $formUrl }";
 		}
 
 		my $form_data;
@@ -231,9 +232,7 @@ class WebService::EveOnline::SSO {
 			[ 'scope', 			'characterFittingsRead'  ],
 			[ 'state',  		($state = self!getState) ]
 		]);
-
-		$!prefix = "https://login.eveonline.com/";
-		my $url = "{ $!prefix }oauth/authorize?{ $p }";
+		my $url = "{ PREFIX }oauth/authorize?{ $p }";
 		my $response;
 
 		$response = $!client.get($url);
@@ -291,7 +290,7 @@ class WebService::EveOnline::SSO {
 		};
 
 		$response = $!postclient.post(
-			"{ $!prefix }/oauth/token", 
+			"{ PREFIX }/oauth/token", 
 			$form_data, 
 			:Authorization("Basic $basic"),
 		);
