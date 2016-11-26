@@ -24,6 +24,10 @@ class WebService::EveOnline::SSO {
 	has %.privateData;
 	has $.tokenData;
 
+	# Store the Character ID selected so that consumers can query for it,
+	# later.
+	has $.characterId;
+
 	submethod BUILD() {
 		$!client = HTTP::UserAgent.new(
 			:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
@@ -173,7 +177,7 @@ class WebService::EveOnline::SSO {
 		}
 
 		my $form_data;
-		$form_data<CharacterId> = $input;
+		$!characterId = $form_data<CharacterId> = $input;
 		$form_data<action> = 'Authorize';
 		for @( $!xmldoc.elements(
 			:TAG<input>, :type<hidden>, :RECURSE(100)
