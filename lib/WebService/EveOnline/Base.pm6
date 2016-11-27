@@ -17,8 +17,6 @@ class WebService::EveOnline::Base {
 	has $!cache_ttl;
 	has $!cache_name_extract;
 
-	has RequestMethod $.method;
-
 	class utimebuf is repr('CStruct') {
 		has int32 $.acttime is rw;
 		has int32 $.modtime is rw;
@@ -35,8 +33,7 @@ class WebService::EveOnline::Base {
 		:$cache_key,
 		:$cache_ttl,
 		:$cache_date_interp,
-		:$cache_name_extract,
-		RequestMethod :$method
+		:$cache_name_extract
 	) {
 		$!http_client = HTTP::UserAgent.new(:useragent(
 			$user_agent.defined ??
@@ -44,7 +41,6 @@ class WebService::EveOnline::Base {
 				!! 
 				"WebService::EveOnline/HTTP::UserAgent/perl6"
 		));
-		$!method = $method // 'GET';
 	
 		die "<cache_ttl> must be an integer value"
 			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
@@ -88,7 +84,6 @@ class WebService::EveOnline::Base {
 		Str     		:$cache_ttl,
 		Code			:$cache_date_interp,
 		Code			:$cache_name_extract
-		RequestMethod	:$method
 	) {
 		self.bless(
 			:$user_agent, 
@@ -97,8 +92,7 @@ class WebService::EveOnline::Base {
 			:$cache_key,
 			:$cache_ttl,
 			:$cache_date_interp,
-			:$cache_name_extract,
-			:$method
+			:$cache_name_extract
 		);
 	}
 
@@ -223,8 +217,11 @@ class WebService::EveOnline::Base {
 		return $retObj;		
 	}
 
-	method makeRequest($url, :$header, :$json) {
+	method makeRequest($url, :$method, :$header, :$json) {
 		my $response;
+
+		die "Invalid value passed as \$method" 
+			unless $method ~~ RequestMethod;
 
 		die "Invalid extra header values passed" 
 			unless $header ~~ Hash;
@@ -253,8 +250,8 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		say "{ $.method == GET ?? 'GET' !! 'POST' } Req: $url";
-		$response = $.method == GET ?? 
+		say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
+		$response = $method == GET ?? 
 			$!http_client.get($url,  :header(%( $header ))) 
 			!! 
 			$!http_client.post($url, :header(%( $header )));

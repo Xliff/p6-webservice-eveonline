@@ -3,7 +3,7 @@ use v6.c;
 use WebService::EveOnline::Base;
 
 class WebService::EveOnline::CREST::Character {
-	also is WebService::EveOnline::Base;
+	also is WebService::EveOnline::CREST::Base;
 
 	constant PREFIX = (
 		tq		=> 'https://crest-tq.eveonline.com/characters',
@@ -12,11 +12,8 @@ class WebService::EveOnline::CREST::Character {
 
 	has $.server;
 	has $.server-prefix;
-	has $.sso;
 
 	method BUILD(:$sso, :$server) {
-		$!sso = $sso;
-
 		$!server = do given $server.lc { 
 			when 'tq' || 'tranquility' || 'tranq' || 't' {
 				'tq';
@@ -40,7 +37,7 @@ class WebService::EveOnline::CREST::Character {
 		:$user_agent,
 		:$cache_prefix,
 		:$cache_prefix_add = 'CREST/Character',
-		:$cache_key = 'cachedUntil'
+		:$cache_ttl = 300
 	) {
 		die "Must pass WebService::EveOnline::SSO object as first parameter"
 			unless $sso.defined && $sso ~~ WebService::EveOnline::SSO;
@@ -60,14 +57,8 @@ class WebService::EveOnline::CREST::Character {
 			:$user_agent,
 			:$cache_prefix,
 			:$cache_prefix_add = 'CREST/Character',
-			:$cache_ttl = 300
+			:$cache_ttl
 		);
-	}
-
-	# cw: There should probably be a base class for CREST. It should 
-	#     use POST instead of GET.
-	method makeRequest($url) {
-
 	}
 
 	method character($characterId) {

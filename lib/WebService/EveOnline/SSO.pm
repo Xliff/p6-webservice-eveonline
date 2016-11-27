@@ -238,6 +238,12 @@ class WebService::EveOnline::SSO {
 			:Authorization("Basic { self!encodeAuth }"),
 		);
 	}
+
+	method getHeader {
+		{
+			Authorization => "Bearer { $.tokenData.access_token }"
+		};
+	}
 	
 	method getToken {
 		my $state;
