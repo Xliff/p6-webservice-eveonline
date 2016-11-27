@@ -11,6 +11,11 @@ class WebService::EveOnline::CREST::Base {
 		$!sso = $sso;
 	}
 
+	method checkScope($scope!) {
+		die "'$scope' scope not specified for this token!"
+			unless $.sso.scopes.grep(* eq $scope);
+	}
+
 	method makeRequest($url, :$method, :$headers) {
 		$.sso.refreshToken if DateTime.now > $.sso.expires;
 

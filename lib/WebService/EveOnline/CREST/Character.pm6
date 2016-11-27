@@ -69,8 +69,7 @@ class WebService::EveOnline::CREST::Character {
 	}
 
 	method contacts {
-		die "characterContactsRead scope not specified for this token!"
-			unless $.sso.scopes.grep(* eq 'characterContactsRead')
+		self.checkScope('characterContactsRead')
 
 		# 5 minute cache
 		self.makeRequest(
@@ -80,9 +79,8 @@ class WebService::EveOnline::CREST::Character {
 
 	method fittings {
 		# 15 minute cache
-		die "characterFittingsRead scope not specified for this token!"
-			unless $.sso.scopes.grep(* eq 'characterFittingsRead');
-		
+		self.checkScope('characterFittingsRead');
+
 		self.makeRequest(
 			"{ $.server-prefix }/{$cid}/fittings/"
 		);
@@ -93,11 +91,66 @@ class WebService::EveOnline::CREST::Character {
 		# 15 minute cache
 		die "Invalid fitting ID" unless $fittingID > 0;
 
-		die "characterFittingsRead scope not specified for this token!"
-			unless $.sso.scopes.grep(* eq 'characterFittingsRead');
+		self.checkScope('characterFittingsRead');
 			
 		self.makeRequest(
 			"{ $.server-prefix }/{$cid}/fitting/$fittingID/"
 		);
 	}
+
+	# cw: The documents are hopeless for this endpoint.
+	method opportunities {
+		# 1 hour cache
+		self.checkScope('characterOpportunitiesRead');
+		
+		self.makeRequest(
+			"{ $.server-prefix }/{$cid}/opportunities/"	
+		);
+	}
+
+	# cw: POST endpoint for waypoints to be handled later.
+	#     Especially since the documentation is completely lacking!
+	method setWaypoints {
+		# cw: REALLY should be an exception.
+		die "Not yet implemented.";
+	}
+
+	method location {
+		# 5 second cache
+		self.checkScope('characterLocationRead');
+
+		self.makeRequest(
+			"{ $.server-prefix }/{$cid}/location/"
+		);
+	}
+
+	# cw: After looking at the methods below, they REALLY belong somewhere
+	#     else -- but I am going by the Eve provided docs and 
+	#     they are NOT reliable.
+	#
+	#	  All of these are UI methods and require a POST with a properly
+	#     formed JSON body.
+
+	# cw: Open Window endpoint to be handled, later.
+	method openMarket($typeID) {
+		my $tid = $typeID // 0;
+		#self.checkScope('remoteClientUI');
+
+		die "Not yet implemented.";
+	}
+
+	method openContract($contractID) {
+		my $cid = $contractID // 0;
+		#self.checkScope('remoteClientUI');
+
+		die "Not yet implemented.";	
+	}
+
+	method openOwner($ownerID, $ownerType) {
+		my $oid = $ownerID // 0;
+		#self.checkScope('remoteClientUI');
+
+		die "Not yet implemented.";	
+	}
+
 }
