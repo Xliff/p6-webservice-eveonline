@@ -1,5 +1,7 @@
 use v6.c;
 
+our enum RequestMethod is export <POST GET>;
+
 class WebService::EveOnline::Base {
 	use DateTime::Parse;
 	use HTTP::UserAgent;
@@ -14,6 +16,8 @@ class WebService::EveOnline::Base {
 	has $!cache_date_interp;
 	has $!cache_ttl;
 	has $!cache_name_extract;
+
+	has RequestMethod $.method;
 
 	class utimebuf is repr('CStruct') {
 		has int32 $.acttime is rw;
@@ -31,14 +35,16 @@ class WebService::EveOnline::Base {
 		:$cache_key,
 		:$cache_ttl,
 		:$cache_date_interp,
-		:$cache_name_extract
+		:$cache_name_extract,
+		RequestMethod :$method
 	) {
 		$!http_client = HTTP::UserAgent.new(:useragent(
 			$user_agent.defined ??
 				$user_agent 
 				!! 
 				"WebService::EveOnline/HTTP::UserAgent/perl6"
-		)); 
+		));
+		$!method = $method // 'GET';
 	
 		die "<cache_ttl> must be an integer value"
 			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
@@ -75,13 +81,14 @@ class WebService::EveOnline::Base {
 	}
 
 	method new(
-		Str 	:$user_agent,
-		Str 	:$cache_prefix,
-		Str 	:$cache_prefix_add,
-		Str 	:$cache_key,
-		Str     :$cache_ttl,
-		Code	:$cache_date_interp,
-		Code	:$cache_name_extract
+		Str 			:$user_agent,
+		Str 			:$cache_prefix,
+		Str 			:$cache_prefix_add,
+		Str 			:$cache_key,
+		Str     		:$cache_ttl,
+		Code			:$cache_date_interp,
+		Code			:$cache_name_extract
+		RequestMethod	:$method
 	) {
 		self.bless(
 			:$user_agent, 
@@ -90,7 +97,8 @@ class WebService::EveOnline::Base {
 			:$cache_key,
 			:$cache_ttl,
 			:$cache_date_interp,
-			:$cache_name_extract
+			:$cache_name_extract,
+			:$method
 		);
 	}
 
@@ -215,8 +223,11 @@ class WebService::EveOnline::Base {
 		return $retObj;		
 	}
 
-	method makeRequest($url, :$json) {
+	method makeRequest($url, :$header, :$json) {
 		my $response;
+
+		die "Invalid extra header values passed" 
+			unless $header ~~ Hash;
 
 		my $cf;
 		if (
@@ -242,8 +253,11 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		say "Req: $url";
-		$response = $!http_client.get($url);
+		say "{ $.method == GET ?? 'GET' !! 'POST' } Req: $url";
+		$response = $.method == GET ?? 
+			$!http_client.get($url,  :header(%( $header ))) 
+			!! 
+			$!http_client.post($url, :header(%( $header )));
 
 		return self.handleResponse($response, $json);
 	}

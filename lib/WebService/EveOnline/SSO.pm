@@ -23,12 +23,13 @@ class WebService::EveOnline::SSO {
 	has %!fieldsInForm;
 	has %.privateData;
 	has $.tokenData;
+	has @.scopes;
 
 	# Store the Character ID selected so that consumers can query for it,
 	# later.
 	has $.characterId;
 
-	submethod BUILD() {
+	submethod BUILD(:@scopes) {
 		$!client = HTTP::UserAgent.new(
 			:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
 		);
@@ -38,7 +39,13 @@ class WebService::EveOnline::SSO {
 			:useragent<WebService::Eve v0.0.1 (rakudo)>
 		);
 
+		@!scopes = @scopes;
+
 		self!getPrivateData;
+	}
+
+	method new(:@scopes) {
+		self.bless(:@scopes);
 	}
 
 	method !getPrivateData {
@@ -230,11 +237,11 @@ class WebService::EveOnline::SSO {
 
 		my $redir = %!privateData<redirect_uri> // "http://localhost:8888/";
 		my $p = prepParams([
-			[ 'response_type', 	'code' 					 ],
-			[ 'redirect_uri', 	$redir 					 ],
+			[ 'response_type', 	'code' 					  ],
+			[ 'redirect_uri', 	$redir 					  ],
 			[ 'client_id', 		%!privateData<client_id>  ],
-			[ 'scope', 			'characterFittingsRead'  ],
-			[ 'state',  		($state = self!getState) ]
+			[ 'scope', 			@.scopes.join(',')  	  ],
+			[ 'state',  		($state = self!getState)  ]
 		]);
 		my $url = "{ PREFIX }oauth/authorize?{ $p }";
 		my $response;
