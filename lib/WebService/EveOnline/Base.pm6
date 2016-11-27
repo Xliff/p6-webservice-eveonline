@@ -225,6 +225,7 @@ class WebService::EveOnline::Base {
 		:$header, 
 		:$cache_ttl,
 		:$cache_key,
+		:$force,
 		:$json
 	) {
 		my $response;
@@ -237,6 +238,7 @@ class WebService::EveOnline::Base {
 
 		my $cf;
 		if (
+			! $force.defined								&&
 			($!cache_ttl.defined || $!cache_key.defined)	&&
 			($cf = $!cache_name_extract($url)).defined
 		) {

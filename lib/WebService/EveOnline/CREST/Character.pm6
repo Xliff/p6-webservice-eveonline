@@ -61,14 +61,14 @@ class WebService::EveOnline::CREST::Character {
 		);
 	}
 
-	method character {
+	method character(:$force) {
 		# 5 minute cache.
 		self.makeRequest(
 			$.request-prefix
 		);
 	}
 
-	method contacts {
+	method contacts(:$force) {
 		self.checkScope('characterContactsRead');
 
 		# 5 minute cache
@@ -77,7 +77,7 @@ class WebService::EveOnline::CREST::Character {
 		);
 	}
 
-	method fittings {
+	method fittings(:$force) {
 		# 15 minute cache
 		self.checkScope('characterFittingsRead');
 
@@ -88,7 +88,7 @@ class WebService::EveOnline::CREST::Character {
 	}
 
 	# cw: POST and DELETE to be handled in their own methods.
-	method fitting(Int $fittingID!) {
+	method fitting(Int $fittingID!, :$force) {
 		# 15 minute cache
 		die "Invalid fitting ID" unless $fittingID > 0;
 
@@ -101,7 +101,7 @@ class WebService::EveOnline::CREST::Character {
 	}
 
 	# cw: The documents are hopeless for this endpoint.
-	method opportunities {
+	method opportunities(:$force) {
 		# 1 hour cache
 		self.checkScope('characterOpportunitiesRead');
 		
@@ -113,12 +113,12 @@ class WebService::EveOnline::CREST::Character {
 
 	# cw: POST endpoint for waypoints to be handled later.
 	#     Especially since the documentation is completely lacking!
-	method setWaypoints {
+	method setWaypoints(:$force) {
 		# cw: REALLY should be an exception.
 		die "Not yet implemented.";
 	}
 
-	method location {
+	method location(:$force) {
 		# 5 second cache
 		self.checkScope('characterLocationRead');
 
@@ -135,21 +135,21 @@ class WebService::EveOnline::CREST::Character {
 	#     formed JSON body.
 
 	# cw: Open Window endpoint to be handled, later.
-	method openMarket($typeID) {
+	method openMarket($typeID, :$force) {
 		my $tid = $typeID // 0;
 		#self.checkScope('remoteClientUI');
 
 		die "Not yet implemented.";
 	}
 
-	method openContract($contractID) {
+	method openContract($contractID, :$force) {
 		my $cid = $contractID // 0;
 		#self.checkScope('remoteClientUI');
 
 		die "Not yet implemented.";	
 	}
 
-	method openOwner($ownerID, $ownerType) {
+	method openOwner($ownerID, $ownerType, :$force) {
 		my $oid = $ownerID // 0;
 		#self.checkScope('remoteClientUI');
 
