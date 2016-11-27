@@ -20,9 +20,10 @@ class WebService::EveOnline::SSO {
 	has $!postclient;
 	has $!client;
 	has $!xmldoc;
+	has $.lastTokenDate;
+	has $.tokenData;
 	has %!fieldsInForm;
 	has %.privateData;
-	has $.tokenData;
 	has @.scopes;
 
 	# Store the Character ID selected so that consumers can query for it,
@@ -46,6 +47,12 @@ class WebService::EveOnline::SSO {
 
 	method new(:@scopes) {
 		self.bless(:@scopes);
+	}
+
+	method !encodeAuth {
+		encode-base64(
+			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
+		);	
 	}
 
 	method !getPrivateData {
@@ -223,8 +230,16 @@ class WebService::EveOnline::SSO {
 
 		$response;
 	}
+
+	method !getBearerToken($form_data) {
+		$!postclient.post(
+			"{ PREFIX }/oauth/token", 
+			$form_data, 
+			:Authorization("Basic { self!encodeAuth }"),
+		);
+	}
 	
-	method getToken is export {
+	method getToken {
 		my $state;
 
 		# cw: Should throw an exception, instead.
@@ -292,25 +307,32 @@ class WebService::EveOnline::SSO {
 		die "Could not find tokenCode in response data"
 			unless $tokenCode.chars;
 
-		my $basic = encode-base64(
-			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
-		);
 		my $form_data = {
 			grant_type	=> 'authorization_code',
 			code 		=> $tokenCode, 
 		};
-
-		$response = $!postclient.post(
-			"{ PREFIX }/oauth/token", 
-			$form_data, 
-			:Authorization("Basic $basic"),
-		);
+		$response = self!getBearerToken($form_data);
 
 		# cw: Should be an exception
 		die "Token not retrieved due to unexpected error."
 			unless $response.is-success;
 
 		$!tokenData = from-json($response.content);
+		$!lastTokenDate = DateTime.now;
+	}
+
+	method refreshToken {
+		my $form_data = {
+			grant_type 		=> 'refresh_token',
+			refresh_token 	=> $.tokenData<refresh_token>
+		}
+		$response = self!getBearerToken($form_data);
+
+		die "Token not refreshed due to unexpected error."
+			unless $response.is-success;
+
+		$!tokenData = from-json($response.content);
+		$!lastTokenDate = DateTime.now;
 	}
 
 }
