@@ -11,9 +11,9 @@ class WebService::EveOnline::CREST::Character {
 	);
 
 	has $.server;
-	has $.server-prefix;
+	has $.request-prefix;
 
-	method BUILD(:$sso, :$server) {
+	method BUILD(:$server) {
 		$!server = do given $server.lc { 
 			when 'tq' || 'tranquility' || 'tranq' || 't' {
 				'tq';
@@ -28,7 +28,7 @@ class WebService::EveOnline::CREST::Character {
 			}
 		}
 
-		$!server-prefix = PREFIX{$.server};
+		$!request-prefix = "{ PREFIX{$.server} }/{ $.sso.CharacterId }";
 	}
 
 	method new(
@@ -64,16 +64,16 @@ class WebService::EveOnline::CREST::Character {
 	method character {
 		# 5 minute cache.
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/"
+			$.request-prefix
 		);
 	}
 
 	method contacts {
-		self.checkScope('characterContactsRead')
+		self.checkScope('characterContactsRead');
 
 		# 5 minute cache
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/contacts/"
+			"{ $.request-prefix }/contacts/"
 		);
 	}
 
@@ -82,7 +82,8 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterFittingsRead');
 
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/fittings/"
+			"{ $.request-prefix }/fittings/"
+			:cache_ttl(900)
 		);
 	}
 
@@ -94,7 +95,8 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterFittingsRead');
 			
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/fitting/$fittingID/"
+			"{ $.request-prefix }/fitting/$fittingID/"
+			:cache_ttl(900)
 		);
 	}
 
@@ -104,7 +106,8 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterOpportunitiesRead');
 		
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/opportunities/"	
+			"{ $.request-prefix }/opportunities/"	
+			:cache_ttl(3600)
 		);
 	}
 
@@ -120,7 +123,7 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterLocationRead');
 
 		self.makeRequest(
-			"{ $.server-prefix }/{$cid}/location/"
+			"{ $.request-prefix }/location/"
 		);
 	}
 

@@ -16,13 +16,14 @@ class WebService::EveOnline::CREST::Base {
 			unless $.sso.scopes.grep(* eq $scope);
 	}
 
-	method makeRequest($url, :$method, :$headers) {
+	method makeRequest($url, :$method, :$headers, :$cache_ttl) {
 		$.sso.refreshToken if DateTime.now > $.sso.expires;
 
 		nextwith(
 			$url, 
 			:$method, 
-			:header($.sso.getHeader.append($headers.pairs))
+			:header($.sso.getHeader.append($headers.pairs)),
+			:$cache_ttl
 		);
 	}
 }

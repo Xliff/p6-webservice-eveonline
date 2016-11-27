@@ -134,7 +134,7 @@ class WebService::EveOnline::Base {
 		#say "File modification time set to {$ttd.Str}";
 	}
 
-	method handleResponse($response, $json) {		
+	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {		
 		my $p5 = Inline::Perl5.new;
 
 		$p5.use('XML::Hash::XS');
@@ -167,15 +167,17 @@ class WebService::EveOnline::Base {
 		}
 
 		my $ttd; 
-		if $!cache_key.defined || $!cache_ttl.defined {
+		if $cache_key.defined || $cache_ttl.defined {
 
 			#say "Cache_key: {$!cache_key}" if $!cache_key.defined;
 
-			if $!cache_ttl.defined {
-				$ttd = DateTime.now.posix + $!cache_ttl;
-			} elsif $!cache_key.defined {
+			# Note that $cache_ttl is local and NOT the attribute.
+			# See makeRequest(), below.
+			if $cache_ttl.defined {
+				$ttd = DateTime.now.posix + $cache_ttl;
+			} elsif $cache_key.defined {
 				# cw: -YYY- Error checking?!? 
-				$ttd = $retObj{$!cache_key}:v;
+				$ttd = $retObj{$cache_key}:v;
 
 				if $ttd !~~ Int {
 					# Parse date using subclass defined function.
@@ -217,7 +219,14 @@ class WebService::EveOnline::Base {
 		return $retObj;		
 	}
 
-	method makeRequest($url, :$method, :$header, :$json) {
+	method makeRequest(
+		$url, 
+		:$method, 
+		:$header, 
+		:$cache_ttl,
+		:$cache_key,
+		:$json
+	) {
 		my $response;
 
 		die "Invalid value passed as \$method" 
@@ -256,7 +265,12 @@ class WebService::EveOnline::Base {
 			!! 
 			$!http_client.post($url, :header(%( $header )));
 
-		return self.handleResponse($response, $json);
+		self.handleResponse(
+			$response, 
+			$json,
+			:cache_ttl($cache_ttl // $!cache_ttl)
+			:cache_key($cache_key // $!cache_key)
+		);
 	}
 
 	method postForm($form, :$json) {
