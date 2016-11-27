@@ -12,10 +12,12 @@ class WebService::EveOnline::CREST::Base {
 	}
 
 	method makeRequest($url, :$headers) {
+		$.sso.refreshToken if DateTime.now > $.sso.expires;
+		
 		nextwith(
 			$url, 
 			:method(POST), 
 			:header($.sso.getHeader.append($headers.pairs))
-		)
+		);
 	}
 }

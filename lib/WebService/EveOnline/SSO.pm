@@ -21,6 +21,7 @@ class WebService::EveOnline::SSO {
 	has $!client;
 	has $!xmldoc;
 	has $.lastTokenDate;
+	has $.expires;
 	has $.tokenData;
 	has %!fieldsInForm;
 	has %.privateData;
@@ -239,6 +240,12 @@ class WebService::EveOnline::SSO {
 		);
 	}
 
+	method !setTokenData($newTokenData) {
+		$!tokenData = $newTokenData;
+		$!lastTokenDate = DateTime.now;
+		$!expires = $.lastTokenDate.later(:seconds($.tokenData.expires_in));
+	}
+
 	method getHeader {
 		{
 			Authorization => "Bearer { $.tokenData.access_token }"
@@ -323,8 +330,12 @@ class WebService::EveOnline::SSO {
 		die "Token not retrieved due to unexpected error."
 			unless $response.is-success;
 
-		$!tokenData = from-json($response.content);
-		$!lastTokenDate = DateTime.now;
+		# cw: Maybe add code to output response if a flag is set?
+		die "Invalid response content-type."
+			unless $response.fields('Content-Type')  eq 'application/json';
+
+		my $jsonObj = from-json($response.content);
+		self!setTokenData($jsonObj);
 	}
 
 	method refreshToken {
@@ -337,8 +348,12 @@ class WebService::EveOnline::SSO {
 		die "Token not refreshed due to unexpected error."
 			unless $response.is-success;
 
-		$!tokenData = from-json($response.content);
-		$!lastTokenDate = DateTime.now;
+		# cw: Maybe add code to output response if a flag is set?
+		die "Invalid response content-type."
+			unless $response.fields('Content-Type')  eq 'application/json';
+
+		my $jsonObj = from-json($response.content);
+		self!setTokenData($jsonObj);
 	}
 
 }

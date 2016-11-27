@@ -1,6 +1,6 @@
 use v6.c;
 
-use WebService::EveOnline::Base;
+use WebService::EveOnline::CREST::Base;
 
 class WebService::EveOnline::CREST::Character {
 	also is WebService::EveOnline::CREST::Base;
@@ -62,11 +62,11 @@ class WebService::EveOnline::CREST::Character {
 	}
 
 	method character($characterId) {
-		my $cid = $characterId // $sso.characterId;
+		my $cid = $characterId // $.sso.characterId;
 
 		# cw: Note that Authorization will have to be handled by the
 		#     CREST base class.
-		makeRequest(
+		self.makeRequest(
 			"{ $.server-prefix }/{$cid}/"
 		);
 	}
