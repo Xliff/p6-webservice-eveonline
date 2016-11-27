@@ -61,13 +61,43 @@ class WebService::EveOnline::CREST::Character {
 		);
 	}
 
-	method character($characterId) {
-		my $cid = $characterId // $.sso.characterId;
-
-		# cw: Note that Authorization will have to be handled by the
-		#     CREST base class.
+	method character {
+		# 5 minute cache.
 		self.makeRequest(
 			"{ $.server-prefix }/{$cid}/"
+		);
+	}
+
+	method contacts {
+		die "characterContactsRead scope not specified for this token!"
+			unless $.sso.scopes.grep(* eq 'characterContactsRead')
+
+		# 5 minute cache
+		self.makeRequest(
+			"{ $.server-prefix }/{$cid}/contacts/"
+		);
+	}
+
+	method fittings {
+		# 15 minute cache
+		die "characterFittingsRead scope not specified for this token!"
+			unless $.sso.scopes.grep(* eq 'characterFittingsRead');
+		
+		self.makeRequest(
+			"{ $.server-prefix }/{$cid}/fittings/"
+		);
+	}
+
+	# cw: POST and DELETE to be handled in their own methods.
+	method fitting(Int $fittingID!) {
+		# 15 minute cache
+		die "Invalid fitting ID" unless $fittingID > 0;
+
+		die "characterFittingsRead scope not specified for this token!"
+			unless $.sso.scopes.grep(* eq 'characterFittingsRead');
+			
+		self.makeRequest(
+			"{ $.server-prefix }/{$cid}/fitting/$fittingID/"
 		);
 	}
 }
