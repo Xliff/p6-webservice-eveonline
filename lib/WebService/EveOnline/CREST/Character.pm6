@@ -64,7 +64,8 @@ class WebService::EveOnline::CREST::Character {
 	method character(:$force) {
 		# 5 minute cache.
 		self.makeRequest(
-			$.request-prefix
+			$.request-prefix,
+			:$force
 		);
 	}
 
@@ -73,17 +74,25 @@ class WebService::EveOnline::CREST::Character {
 
 		# 5 minute cache
 		self.makeRequest(
-			"{ $.request-prefix }/contacts/"
+			"{ $.request-prefix }/contacts/",
+			:$force
 		);
 	}
 
+	# cw: This is the only endpoint where $force may be necessary 
+	#     since it supports POST write endpoint (which hasn't
+	#     been implemented, yet.
+	#
+	#     Consider removing :$force from other methods unless
+	#     they need it.
 	method fittings(:$force) {
 		# 15 minute cache
 		self.checkScope('characterFittingsRead');
 
 		self.makeRequest(
-			"{ $.request-prefix }/fittings/"
-			:cache_ttl(900)
+			"{ $.request-prefix }/fittings/",
+			:cache_ttl(900),
+			:$force
 		);
 	}
 
@@ -96,7 +105,8 @@ class WebService::EveOnline::CREST::Character {
 			
 		self.makeRequest(
 			"{ $.request-prefix }/fitting/$fittingID/"
-			:cache_ttl(900)
+			:cache_ttl(900),
+			:$force
 		);
 	}
 
@@ -106,8 +116,9 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterOpportunitiesRead');
 		
 		self.makeRequest(
-			"{ $.request-prefix }/opportunities/"	
-			:cache_ttl(3600)
+			"{ $.request-prefix }/opportunities/",	
+			:cache_ttl(3600),
+			:$force
 		);
 	}
 
@@ -123,7 +134,8 @@ class WebService::EveOnline::CREST::Character {
 		self.checkScope('characterLocationRead');
 
 		self.makeRequest(
-			"{ $.request-prefix }/location/"
+			"{ $.request-prefix }/location/",
+			:$force
 		);
 	}
 
