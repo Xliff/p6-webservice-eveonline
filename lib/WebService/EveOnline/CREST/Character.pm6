@@ -5,16 +5,16 @@ use WebService::EveOnline::CREST::Base;
 class WebService::EveOnline::CREST::Character {
 	also is WebService::EveOnline::CREST::Base;
 
-	constant PREFIX = (
+	constant PREFIX = {
 		tq		=> 'https://crest-tq.eveonline.com/characters',
 		sisi	=> 'https://crest-sisi.eveonline.com/characters'
-	);
+	};
 
 	has $.server;
 	has $.request-prefix;
 
-	method BUILD(:$server) {
-		$!server = do given $server.lc { 
+	method !getServer($server) {
+		given $server.lc { 
 			when 'tq' || 'tranquility' || 'tranq' || 't' {
 				'tq';
 			}
@@ -27,7 +27,10 @@ class WebService::EveOnline::CREST::Character {
 				die "Unknown CREST server passed as argument."
 			}
 		}
+	}
 
+	method BUILD(:$server) {
+		$!server = self!getServer($server);
 		$!request-prefix = "{ PREFIX{$.server} }/{ $.sso.CharacterId }";
 	}
 
@@ -42,13 +45,7 @@ class WebService::EveOnline::CREST::Character {
 		die "Must pass WebService::EveOnline::SSO object as first parameter"
 			unless $sso.defined && $sso ~~ WebService::EveOnline::SSO;
 
-		# cw: Note that CREST calls, the cache time can vary. 
-		#     This will need to be an enhancement made to 
-		#     WebService::EveOnline::Base.
-		# 
-		# 	  For now, we use the more common time of 5 minutes and
-		#     let the server handle things. 
-		# 
+		# cw: 
 		#     -YYY- Should rate limiting be handled by the consumer? Would
 		#     make life easier if we passed the buck on that.
 		self.bless(
@@ -61,30 +58,38 @@ class WebService::EveOnline::CREST::Character {
 		);
 	}
 
-	method character(:$force) {
+	# Public character data request can be handled without instantiating.
+	multi method character(
+		WebService::EveOnline::CREST::Character:U: 
+		Str $server!,
+		Int $characterId!
+	) {
+		die "Invalid character ID." unless $characterId > 0;
+
+		self.makeRequest(
+			"{ PREFIX{self!getServer($server)} }/$characterId/"
+		)
+	}
+
+	multi method character(WebService::EveOnline::CREST::Character:D:) {
 		# 5 minute cache.
 		self.makeRequest(
-			$.request-prefix,
-			:$force
+			"{ $.request-prefix }/"
 		);
 	}
 
-	method contacts(:$force) {
+	method contacts {
 		self.checkScope('characterContactsRead');
 
 		# 5 minute cache
 		self.makeRequest(
-			"{ $.request-prefix }/contacts/",
-			:$force
+			"{ $.request-prefix }/contacts/"
 		);
 	}
 
 	# cw: This is the only endpoint where $force may be necessary 
 	#     since it supports POST write endpoint (which hasn't
 	#     been implemented, yet.
-	#
-	#     Consider removing :$force from other methods unless
-	#     they need it.
 	method fittings(:$force) {
 		# 15 minute cache
 		self.checkScope('characterFittingsRead');
@@ -111,31 +116,29 @@ class WebService::EveOnline::CREST::Character {
 	}
 
 	# cw: The documents are hopeless for this endpoint.
-	method opportunities(:$force) {
+	method opportunities {
 		# 1 hour cache
 		self.checkScope('characterOpportunitiesRead');
 		
 		self.makeRequest(
 			"{ $.request-prefix }/opportunities/",	
-			:cache_ttl(3600),
-			:$force
+			:cache_ttl(3600)
 		);
 	}
 
 	# cw: POST endpoint for waypoints to be handled later.
 	#     Especially since the documentation is completely lacking!
-	method setWaypoints(:$force) {
+	method setWaypoints {
 		# cw: REALLY should be an exception.
 		die "Not yet implemented.";
 	}
 
-	method location(:$force) {
+	method location {
 		# 5 second cache
 		self.checkScope('characterLocationRead');
 
 		self.makeRequest(
-			"{ $.request-prefix }/location/",
-			:$force
+			"{ $.request-prefix }/location/"
 		);
 	}
 
@@ -147,21 +150,21 @@ class WebService::EveOnline::CREST::Character {
 	#     formed JSON body.
 
 	# cw: Open Window endpoint to be handled, later.
-	method openMarket($typeID, :$force) {
+	method openMarket($typeID) {
 		my $tid = $typeID // 0;
 		#self.checkScope('remoteClientUI');
 
 		die "Not yet implemented.";
 	}
 
-	method openContract($contractID, :$force) {
+	method openContract($contractID) {
 		my $cid = $contractID // 0;
 		#self.checkScope('remoteClientUI');
 
 		die "Not yet implemented.";	
 	}
 
-	method openOwner($ownerID, $ownerType, :$force) {
+	method openOwner($ownerID, $ownerType) {
 		my $oid = $ownerID // 0;
 		#self.checkScope('remoteClientUI');
 
