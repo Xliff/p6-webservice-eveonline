@@ -156,10 +156,9 @@ class WebService::EveOnline::Base {
 						$p5.call('xml2hash', $response.content);
 
 					#say "R: {$response.content}";
-	
 				} elsif ! $response.has-content {
-
 					#say "No response content";
+					
 					return;
 
 				}
@@ -168,7 +167,6 @@ class WebService::EveOnline::Base {
 
 		my $ttd; 
 		if $cache_key.defined || $cache_ttl.defined {
-
 			#say "Cache_key: {$!cache_key}" if $!cache_key.defined;
 
 			# Note that $cache_ttl is local and NOT the attribute.

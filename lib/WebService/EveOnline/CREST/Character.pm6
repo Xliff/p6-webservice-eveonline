@@ -78,6 +78,13 @@ class WebService::EveOnline::CREST::Character {
 		);
 	}
 
+	method loyaltyPoints {
+		# Unknown cache, since not documented.
+		self.makeRequest(
+			"{ $.request-prefix }/loyaltypoints/"
+		);
+	}
+
 	method contacts {
 		self.checkScope('characterContactsRead');
 
