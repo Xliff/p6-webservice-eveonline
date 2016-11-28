@@ -5,33 +5,13 @@ use WebService::EveOnline::CREST::Base;
 class WebService::EveOnline::CREST::Character {
 	also is WebService::EveOnline::CREST::Base;
 
-	constant PREFIX = {
-		tq		=> 'https://crest-tq.eveonline.com/characters',
-		sisi	=> 'https://crest-sisi.eveonline.com/characters'
-	};
-
 	has $.server;
 	has $.request-prefix;
 
-	method !getServer($server) {
-		given $server.lc { 
-			when 'tq' || 'tranquility' || 'tranq' || 't' {
-				'tq';
-			}
-
-			when 'sisi' || 'singularity' || 'sing' || 's' {
-				'sisi'
-			}
-
-			default {
-				die "Unknown CREST server passed as argument."
-			}
-		}
-	}
-
 	method BUILD(:$server) {
-		$!server = self!getServer($server);
-		$!request-prefix = "{ PREFIX{$.server} }/{ $.sso.CharacterId }";
+		$!server = self.getServer($server);
+		$!request-prefix = 
+			"{ self.PREFIX{$.server} }/characters/{ $.sso.CharacterId }";
 	}
 
 	method new(
@@ -66,9 +46,11 @@ class WebService::EveOnline::CREST::Character {
 	) {
 		die "Invalid character ID." unless $characterId > 0;
 
-		self.makeRequest(
-			"{ PREFIX{self!getServer($server)} }/$characterId/"
-		)
+		my $p = WebService::EveOnline::CREST::Base::PREFIX{
+			WebService::EveOnline::CREST::Base.getServer($server)
+		};
+
+		self.makeRequest("{ $p }/characters/$characterId/");
 	}
 
 	multi method character(WebService::EveOnline::CREST::Character:D:) {

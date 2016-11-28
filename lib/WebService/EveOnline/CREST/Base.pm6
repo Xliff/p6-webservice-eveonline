@@ -9,8 +9,29 @@ class WebService::EveOnline::CREST::Base {
 
 	has $.sso;
 
+	constant PREFIX = {
+		tq		=> 'https://crest-tq.eveonline.com',
+		sisi	=> 'https://crest-sisi.eveonline.com'
+	};
+
 	submethod BUILD(:$sso) {
 		$!sso = $sso;
+	}
+
+	method getServer($server) {
+		given $server.lc { 
+			when 'tq' || 'tranquility' || 'tranq' || 't' {
+				'tq';
+			}
+
+			when 'sisi' || 'singularity' || 'sing' || 's' {
+				'sisi'
+			}
+
+			default {
+				die "Unknown CREST server passed as argument."
+			}
+		}
 	}
 
 	method checkScope($scope!) {
