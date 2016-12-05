@@ -5,11 +5,7 @@ use WebService::EveOnline::CREST::Base;
 class WebService::EveOnline::CREST::Character {
 	also is WebService::EveOnline::CREST::Base;
 
-	has $.server;
-	has $.request-prefix;
-
-	method BUILD(:$server) {
-		$!server = self.getServer($server);
+	method BUILD {
 		$!request-prefix = 
 			"{ self.PREFIX{$.server} }/characters/{ $.sso.CharacterId }";
 	}
@@ -33,7 +29,7 @@ class WebService::EveOnline::CREST::Character {
 			:$server,
 			:$user_agent,
 			:$cache_prefix,
-			:$cache_prefix_add = 'CREST/Character',
+			:$cache_prefix_add,
 			:$cache_ttl
 		);
 	}

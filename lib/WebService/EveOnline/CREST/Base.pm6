@@ -1,21 +1,23 @@
 use v6.c;
 
-use HTTP::UserAgent;
-use JSON::Fast;
 use WebService::EveOnline::Base;
+use WebService::EveOnline::Utils;
 
 class WebService::EveOnline::CREST::Base {
 	also is WebService::EveOnline::Base;
 
 	has $.sso;
+	has $.server;
+	has $.request-prefix;
 
 	constant PREFIX = {
 		tq		=> 'https://crest-tq.eveonline.com',
 		sisi	=> 'https://crest-sisi.eveonline.com'
 	};
 
-	submethod BUILD(:$sso) {
+	submethod BUILD(:$sso, :$server) {
 		$!sso = $sso;
+		$!server = self.getServer($server);
 	}
 
 	method getServer($server) {
@@ -39,19 +41,13 @@ class WebService::EveOnline::CREST::Base {
 			unless $.sso.scopes.grep(* eq $scope);
 	}
 
+	# cw: This needs to be folded into the global Base.
+	#     
 	multi method makeRequest(
 		WebService::EveOnline::CREST::Base:U:
 		$url
 	) {
-		# cw: Eventually to go behind a DEBUG flag.
-		say "Requesting: $url";
-		
-		my $response = HTTP::UserAgent.new.get($url);
-
-		die "Request failed with unexpected error."
-			unless $response ~~ HTTP::Response && $response.is-success;
-			
-		from-json($response.content);
+		makeRequestStatic($url);
 	}
 
 	multi method makeRequest(
@@ -62,7 +58,8 @@ class WebService::EveOnline::CREST::Base {
 		:$cache_ttl, 
 		:$force
 	) {
-		$.sso.refreshToken if DateTime.now > $.sso.expires;
+		$.sso.refreshToken 
+			if $.sso.defined && DateTime.now > $.sso.expires;
 
 		nextwith(
 			$url, 

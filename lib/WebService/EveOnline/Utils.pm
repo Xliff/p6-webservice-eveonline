@@ -3,6 +3,7 @@ use v6.c;
 use DateTime::Parse;
 use HTTP::UserAgent;
 use HTTP::Cookie;
+use JSON::Fast;
 
 grammar Cookie_Grammar {
     regex TOP {
@@ -77,6 +78,14 @@ sub getCookies($r) is export {
 	@cookies;
 }
 
-sub getRequest($ua, $url) {
+sub makeRequestStatic($url) {
+	# cw: Eventually to go behind a DEBUG flag.
+	say "Requesting: $url";
+	
+	my $response = HTTP::UserAgent.new.get($url);
 
+	die "Request failed with unexpected error."
+		unless $response ~~ HTTP::Response && $response.is-success;
+		
+	from-json($response.content);
 }
