@@ -2,7 +2,7 @@ use v6.c;
 
 use WebService::EveOnline::CREST::Base;
 
-class WebService::EveOnline::CREST::Character {
+class WebService::EveOnline::CREST::Map {
 	also is WebService::EveOnline::CREST::Base;
 
 	method BUILD {

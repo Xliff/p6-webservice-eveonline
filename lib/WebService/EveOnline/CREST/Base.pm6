@@ -50,6 +50,15 @@ class WebService::EveOnline::CREST::Base {
 		makeRequestStatic($url);
 	}
 
+	# cw: Determine if paged requests have a universal handling method.
+	#     then see the best way to interface it. Do we allow for
+	#     random page access? If so, how?
+	#
+	#		So far it looks like basic handling is as follows:
+	#			if results have a "next" key:
+	#				request the page associated with the "next" value
+	#				push "items" data into existing "items" array
+	#		
 	multi method makeRequest(
 		WebService::EveOnline::CREST::Base:D:
 		$url, 
@@ -61,13 +70,31 @@ class WebService::EveOnline::CREST::Base {
 		$.sso.refreshToken 
 			if $.sso.defined && DateTime.now > $.sso.expires;
 
-		nextwith(
-			$url, 
-			:$method, 
-			:header($.sso.getHeader.append($headers.pairs)),
-			:$cache_ttl,
-			:$force,
-			:json
-		);
+		my $retVal;
+		do {
+			my $data;
+
+			$data = callwith(
+				$data<next><href> // $data<next> // $url, 
+				:$method, 
+				:header($.sso.getHeader.append($headers.pairs)),
+				:$cache_ttl,
+				:$force,
+				:json
+			);
+
+			# cw: Do we limit paged data? If so, how?
+			if !$retVal.defined {
+				$retVal = $data;
+			} else {
+				if $data<next>.defined && $data<items>.defined {
+					$retVal<items>.push($data<items>);
+				}
+			}
+		} unless $data<next>.defined;
+		# cw: If paged, do we need items related to paging?
+		# $retVal.delete('pageCount');
+		# $retVal.delete('pageCount_str');
 	}
+	
 }
