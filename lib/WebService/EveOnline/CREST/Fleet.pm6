@@ -35,6 +35,40 @@ class WebService::EveOnline::CREST::Fleet {
 		);
 	}
 
+  method fleet {
+    checkScope('fleetRead');
 
+    self.makeRequest($.fleet_route);
+  }
+
+  method fleetMembers {
+    checkScope('fleetRead');
+
+    self.makeRequest("{ $.fleet_route }/members/");
+  }
+
+  method fleetMember(Int $Id) {
+    checkScope('fleetRead');
+
+    self.makeRequest("{ $.fleet_route }/members/{ $Id }/");
+  }
+
+  method fleetWings {
+    checkScope('fleetRead');
+
+    self.makeRequest("{ $.fleet_route }/wings/");
+  }
+
+  method fleetWing($Id) {
+    checkScope('fleetRead');
+
+    self.makeRequest("{ $.fleet_route }/wings/{ $Id }/");
+  }
+
+  method fleetSquads($wId) {
+    checkScope('fleetRead');
+
+    self.makeRequest("{ $.fleet_route }/wings/{ $Id }/squads/");
+  }
 
 }
