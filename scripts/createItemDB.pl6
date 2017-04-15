@@ -4,14 +4,19 @@ use v6.c;
 use DBIish;
 
 
-sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database = "Eve") {	
+sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database = "Eve") {
 	my $i_dbh = DBIish.connect(
-		'mysql', 
+		'mysql',
 		:host($host),
-		:database($database), 
-		:user($user), 
+		:database($database),
+		:user($user),
 		:password($password)
 	);
+
+	my $dbname = 'Eve_Static.sqlite3';
+	my $olddbname = "$dbname.old";
+	$olddbname.IO.unlink if $olddbname.IO.e && $olddbname.IO.f;
+	$dbname.IO.rename($olddbname) if $dbname.IO.e && $dbname.IO.f;
 
 	my $o_dbh = DBIish.connect(
 		'SQLite',
@@ -43,12 +48,12 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		SELECT typeID, groupID, typeName
 		FROM invTypes
 		ORDER BY typeID
-    STATEMENT
+  STATEMENT
 
-    $i_sth.execute();
+  $i_sth.execute();
 
-    $o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-		INSERT INTO invTypes (typeID, groupID, typeName) 
+  $o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO invTypes (typeID, groupID, typeName)
 		VALUES (?, ?, ?)
 	STATEMENT
 
@@ -58,11 +63,58 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
     	$o_sth.execute($_<typeID>, $_<groupID>, $_<typeName>);
     	print '.' if $cnt++ % 1000 == 0;
 	}
-    $i_sth.finish;
-    say "({$cnt})";
+  $i_sth.finish;
+  say "({$cnt})";
 
-    # Stations
-    print "Adding stations...";
+	# Blueprint data
+	print "Adding blueprints...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE TABLE industryActivityMaterials (
+			typeID INTEGER,
+			activityId INTEGER,
+			materialTypeId INTEGER,
+			quantity INTEGER
+		)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX indActMat_typeId_idx ON industryActivityMaterials(typeId)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX indActMat_matId_idx ON industryActivityMaterials(materialTypeId)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT typeID, activityId, materialTypeId, quantity
+		FROM industryActivityMaterials
+		ORDER BY typeID
+  STATEMENT
+
+  $i_sth.execute();
+
+  $o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO industryActivityMaterials (typeID, activityId, materialTypeId, quantity)
+		VALUES (?, ?, ?, ?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+    	$o_sth.execute($_<typeID>, $_<activityId>, $_<materialTypeId>, $_<quantity>);
+    	print '.' if $cnt++ % 1000 == 0;
+	}
+	$i_sth.finish;
+	say "({$cnt})";
+
+  # Stations
+  print "Adding stations...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		CREATE TABLE Stations (
 			stationID INTEGER PRIMARYY KEY NOT NULL,
@@ -97,14 +149,14 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		SELECT stationID, security, solarSystemID, regionID, stationName
 		FROM staStations
 		ORDER BY stationID
-    STATEMENT
+  STATEMENT
 
-    $i_sth.execute();
+  $i_sth.execute();
 
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		INSERT INTO Stations (
 			stationID, security, solarSystemID, regionID, stationName
-		) 
+		)
 		VALUES (?, ?, ?, ?, ?)
 	STATEMENT
 
@@ -112,17 +164,17 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	$cnt = 0;
 	for @data {
 	    $o_sth.execute(
-	    	$_<stationID>, 
-	    	$_<security>, 
-	    	$_<solarSystemID>, 
-	    	$_<regionID>, 
+	    	$_<stationID>,
+	    	$_<security>,
+	    	$_<solarSystemID>,
+	    	$_<regionID>,
 	    	$_<stationName>
 		);
 		print '.' if $cnt++ % 1000 == 0;
 	}
-    $i_sth.finish;
-    say "({$cnt})\n\nDone.\n";
+  $i_sth.finish;
+  say "({$cnt})\n\nDone.\n";
 
-    $o_dbh.dispose;
-    $i_dbh.dispose;
+  $o_dbh.dispose;
+  $i_dbh.dispose;
 }
