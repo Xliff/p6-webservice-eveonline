@@ -230,29 +230,15 @@ sub openStaticDB($sqlite) {
 	die "Cannot open static Eve data!";
 }
 
-sub getAllIDs {
-	return unless %inv.elems == 0;
-
+sub getIDs(Int $typeID) {
+	say "Fetching blueprint data (type_id = $typeID) ...";
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-		SELECT typeID, typeName
-		FROM invTypes
-	STATEMENT
-
-	$sth.execute;
-	for @($sth.allrows) -> $r {
-		%inv<_BYID_>{$r[0]} = %inv{$r[1].lc} = {
-			name 	 => $r[1],
-			typeid => $r[0];
-		};
-	}
-	$sth.finish;
-
-	$sth = $sq_dbh.prepare(q:to/STATEMENT/);
 		SELECT typeId, activityId, materialTypeId, quantity
 		FROM industryActivityMaterials
+		WHERE typeID = ?
 	STATEMENT
 
-	$sth.execute;
+	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
 		my $item_req = [ $r[2], $r[3] ];
 		if %bps{ $r[0] }.defined {
@@ -265,92 +251,57 @@ sub getAllIDs {
 	}
 	$sth.finish;
 
+	say "Fetching item data...";
+	my @matIDs = %bps{$typeID}<materials>.map: { $_[0] };
+	$sth = $sq_dbh.prepare(qq:to/STATEMENT/);
+		SELECT typeID, typeName
+		FROM invTypes
+		WHERE
+			typeID IN ( { ('?' xx @matIDs.elems).join(',') } )
+	STATEMENT
+
+	$sth.execute(@matIDs);
+	for @($sth.allrows) -> $r {
+		%inv{$r[0]} = $r[1];
+	}
 }
 
 multi sub MAIN (Str :$type_name!, Str :$sqlite) {
 	openStaticDB($sqlite);
 
+	my $bpname = $type_name;
+	$bpname ~= " Blueprint" unless $bpname ~~ m:i/Blueprint$/;
+
+	# cw: Best way to load ICU extension for proper non-ASCII operation, anyone?
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
 		SELECT typeID
 		FROM invTypes
 		WHERE
-			typeName = ?
+			LOWER(typeName) = ?
   STATEMENT
 
-	$sth.execute($type_name);
+	$sth.execute($bpname.lc);
 
 	my $typeID;
 	my @result = $sth.allrows;
 	if @result.elems == 1 {
 		$typeID = @result[0][0];
-
-		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-			SELECT typeID
-			FROM industryActivityMaterials
-			WHERE
-				typeID = ?
-	  STATEMENT
-
-		$sth.execute($typeID);
-		my @results = $sth.allrows;
-		die "ERROR! '$type_name' is not a blueprint!\n" unless @results;
 	} elsif @result.elems > 1 {
 		# This should never happen, but we should balk if it does!
 		die "ERROR! Got more than one item with that name, which should not happen!\n";
 	} else {
-		say "No items found matching: '$type_name'.";
-		my $fuzzy_search = (try require ::('Text::Levenshtein::Damerau')) !~~ Nil;
-
-		if $fuzzy_search {
-			say "Searching for close matches...";
-			getAllIDs;
-
-			require Text::Levenshtein::Damerau;
-
-			my $dl = Text::Levenshtein::Damerau.new(
-				max_distance	=> 4, 	# If you miss more than 4, then no soup for you!
-				targets 			=> %inv.keys.grep( {
-					return False if $_ eq '_BYID_';
-					%bps{ %inv{$_}<typeid> }.defined
-				} ),
-				sources 			=> $type_name.lc
-			);
-
-			my %results = $dl.get_results;
-
-			if %results.elems {
-				for %results.kv -> $source, $targets {
-					if !$targets.elems {
-						say "None found. ";
-						last;
-					} elsif $targets.elems == 1 {
-						say "Did you mean: '{$targets.pairs[0].key}'?";
-						last;
-					}
-
-					say "Did you mean any of the following:";
-					for $targets.kv -> $target, $dld {
-						next unless $dld;
-						say "\t'$target'";
-					}
-				}
-			} else {
-				say "None found.";
-			}
-		} else {
-			say "None found.";
-		}
+		die "No item found matching '$bpname'.\n" unless $typeID.defined;
 	}
-
-	die "No item found matching '$type_name'.\n" unless $typeID.defined;
 
 	MAIN(:type_id($typeID), :$sqlite);
 }
 
 multi sub MAIN (Int :$type_id!, Str :$sqlite) {
 	openStaticDB($sqlite);
-	getAllIDs;
+	getIDs($type_id);
 
+	dd %bps;
+	dd %inv;
 	say "We can start getting the BOM, daddy!";
 	exit;
 
