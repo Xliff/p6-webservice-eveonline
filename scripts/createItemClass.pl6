@@ -3,13 +3,15 @@
 use v6.c;
 use DBIish;
 
+#const MAXITEM = 16369;
+constant MAXITEM = 20000;
 
-sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database = "Eve") {	
+sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database = "Eve") {
 	my $dbh = DBIish.connect(
-		'mysql', 
+		'mysql',
 		:host($host),
-		:database($database), 
-		:user($user), 
+		:database($database),
+		:user($user),
 		:password($password)
 	);
 
@@ -29,32 +31,33 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 			FROM invTypes
 			WHERE typeID > {$max_id}
 			ORDER BY typeID
-			LIMIT 16360
-	        STATEMENT
+			LIMIT {MAXITEM}
+    STATEMENT
 
-	    $sth.execute();
+    $sth.execute();
 
-	    my @data = $sth.allrows(:array-of-hash);
-	    last if @data.elems == 0;
+    my @data = $sth.allrows(:array-of-hash);
+    last if @data.elems == 0;
 
-	    say "our \%itemLookup{$l_cnt} = (";			
+    say "our \%itemLookup{$l_cnt} = (";
 
-	    for @data -> $d {
-	    	my $tn;
-	    	$tn = $d<typeName>.defined ?? (S:g/\"/\\"/ given $d<typeName>) !! '';
-	    	say qq:to/ITEM/;
+    for @data -> $d {
+    	my $tn;
+    	$tn = $d<typeName>.defined ?? (S:g/\"/\\"/ given $d<typeName>) !! '';
+    	say qq:to/ITEM/;
 	    			{$d<typeID>}	=> \{
 	    				typeID   => {$d<typeID>},
 		    			groupID  => {$d<groupID>},
 		    			typeName => "{ $tn }"
 				\},
 			ITEM
-	    }
-
-	    say ");\n";
-
-	    last if @data.elems < 16360;
-	    $max_id = @data[* - 1]<typeID>;
-	    $l_cnt++;
     }
+
+    say ");\n";
+
+    #last if @data.elems < 16360;
+		last if @data.elems < MAXITEM;
+    $max_id = @data[* - 1]<typeID>;
+    $l_cnt++;
+  }
 }
