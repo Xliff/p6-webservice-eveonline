@@ -8,10 +8,9 @@ use WebService::EveOnline::EveCentral;
 
 my $sq_dbh;
 my %inv;
-my %bps;
+my %bp;
 my %mats;
 my %market;
-my @materials;
 
 enum Filter <
 	NONE
@@ -34,6 +33,12 @@ my @hubs = <<
 	60012412
 >>;
 
+# Print error without backtrace.
+sub fatal($msg) {
+	note($msg);
+	exit;
+}
+
 sub retrieveMarketData {
 	my $ec = WebService::EveOnline::EveCentral.new;
 
@@ -44,7 +49,7 @@ sub retrieveMarketData {
 	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 	my @avoidance = (60003760, 60012412);
 
-	for @materials -> $k {
+	for %bp<materials>.map( { $_[0] } ) -> $k {
 		say "Retrieving Data for item '{ %inv{$k} }'";
 		my %m = $ec.quickLook(:typeID($k));
 
@@ -63,17 +68,19 @@ sub retrieveMarketData {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<station> == any(@hubs)
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<station> == any(@hubs)
+								&&
+								$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><buy_orders><order> =
 					%m<quicklook><buy_orders><order>.grep:
 						{
-							$_<station> == any(@hubs)
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<station> == any(@hubs)
+								&&
+								$_<station> !== any(@avoidance)
 						}
 			}
 
@@ -82,45 +89,49 @@ sub retrieveMarketData {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<region> == $region
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<region> == $region
+								&&
+								$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><buy_orders><order> =
 					%m<quicklook><buy_orders><order>.grep:
 						{
-							$_<region> == $region
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<region> == $region
+								&&
+								$_<station> !== any(@avoidance)
 						}
 			}
 
 			when STATION {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
-						{ $_<station> == $station; }
+						{ $_.defined && $_<station> == $station; }
 
 				%m<quicklook><buy_orders><order> =
 					%m<quicklook><buy_orders><order>.grep:
-						{ $_<station> == $station; }
+						{ $_.defined && $_<station> == $station; }
 			}
 
 			when SECLEV_GT {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> >= $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> >= $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> >= $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> >= $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 			}
 
@@ -128,17 +139,19 @@ sub retrieveMarketData {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> <= $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> <= $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> <= $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> <= $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 			}
 
@@ -146,17 +159,19 @@ sub retrieveMarketData {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> == $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> == $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
 						{
-							$_<security> == $seclev
-							&&
-							$_<station> !== any(@avoidance)
+							$_.defined &&
+								$_<security> == $seclev
+								&&
+								$_<station> !== any(@avoidance)
 						}
 			}
 
@@ -165,15 +180,14 @@ sub retrieveMarketData {
 			}
 		}
 
-		# Sort from cheapest to highest for sell orders.
-		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort: {
-			$^a<price> <=> $^b<price>
+		# Sort function: ascending by prince, descending by quantity remaining.
+		my $sorter = {
+				     $^a<price> <=> $^b<price> ||
+				$^b<vol_remain> <=> $^a<vol_remain>
 		};
 
-		# Sort from highest to lowest for buy order.
-		%market{$k}<buy> = %m<quicklook><buy_orders><order>.sort: {
-			$^b<price> <=> $^a<price>
-		};
+		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort: $sorter;
+		%market{$k}<buy>  = %m<quicklook><buy_orders><order>.sort:  $sorter;
 	}
 }
 
@@ -219,7 +233,7 @@ sub openStaticDB($sqlite) {
 
 	my $sq_file = $sqlite || 'Eve_Static.sqlite3';
 
-	die "ERROR! Static eve data file not found at '$sq_file'!\n"
+	fatal("ERROR! Static eve data file not found at '$sq_file'!\n")
 		unless $sq_file.IO.e && $sq_file.IO.f;
 
 	$sq_dbh = DBIish.connect(
@@ -228,7 +242,7 @@ sub openStaticDB($sqlite) {
 		:PrintError(True)
 	)
 	or
-	die "Cannot open static Eve data!";
+	fatal("Cannot open static Eve data!");
 }
 
 sub getIDs(Int $typeID) {
@@ -241,19 +255,12 @@ sub getIDs(Int $typeID) {
 
 	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
-		my $item_req = [ $r[2], $r[3] ];
-		if %bps{ $r[0] }.defined {
-			%bps{ $r[0] }<materials>.push($item_req);
-		} else {
-			%bps{ $r[0] } = {
-				materials => [ $item_req ]
-			};
-		}
+		%bp<materials>.push: [ $r[2], $r[3] ];
 	}
 	$sth.finish;
 
 	say "Fetching item data...";
-	@materials = %bps{$typeID}<materials>.map: { $_[0] };
+	my @materials = %bp<materials>.map: { $_[0] };
 	$sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 		SELECT typeID, typeName
 		FROM invTypes
@@ -265,6 +272,48 @@ sub getIDs(Int $typeID) {
 	for @($sth.allrows) -> $r {
 		%inv{$r[0]} = $r[1];
 	}
+}
+
+sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
+	openStaticDB($sqlite);
+	getIDs($type_id);
+	retrieveMarketData;
+
+	my $item_name = $bpname;
+	unless $item_name.defined {
+		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+			SELECT typeName
+			FROM invTypes
+			WHERE
+				typeID = ?
+	  STATEMENT
+
+		$sth.execute($type_id);
+
+		my @result = $sth.allrows;
+		if @result.elems == 1 {
+			$item_name = @result[0][0];
+		} else {
+			fatal("ERROR! Could not retrieve item name with type_id.");
+		}
+	}
+	$item_name = $item_name.tc;
+
+	say "Ready to resolve fit based on pricing data...";
+	exit;
+
+	my %cart; # Need to define cart!
+	my $total = 0;
+	my $mq = '=' x 40;
+	say "\n{$mq}\nShopping List for: {$item_name}\n{$mq}";
+	for %cart.keys -> $k {
+		say "$k:";
+		for @(%cart{$k}) -> $o {
+			say "\t{$o<station>.substr(0, 40)}\t\t$o<count>\t{commaize($o<unit_price>)}\t{commaize($o<subtotal>)}";
+			$total += $o<subtotal>;
+		}
+	}
+	say "{$mq}\nTOTAL INVOICE: {commaize($total)} ISK\n{$mq}";
 }
 
 multi sub MAIN (Str :$type_name!, Str :$sqlite) {
@@ -283,39 +332,20 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite) {
 
 	$sth.execute($bpname.lc);
 
-	my $typeID;
+	my $type_id;
 	my @result = $sth.allrows;
 	if @result.elems == 1 {
-		$typeID = @result[0][0];
+		$type_id = @result[0][0];
 	} elsif @result.elems > 1 {
 		# This should never happen, but we should balk if it does!
-		die "ERROR! Got more than one item with that name, which should not happen!\n";
+		fatal("ERROR! Got more than one item with that name, which should not happen!\n");
 	} else {
-		die "No item found matching '$bpname'.\n" unless $typeID.defined;
+		fatal("No item found matching '$bpname'.\n") unless $type_id.defined;
 	}
 
-	MAIN(:type_id($typeID), :$sqlite);
+	actualMAIN(:$type_id, :$bpname, :$sqlite);
 }
 
 multi sub MAIN (Int :$type_id!, Str :$sqlite) {
-	openStaticDB($sqlite);
-	getIDs($type_id);
-	retrieveMarketData;
-
-	dd %market;
-	say "Ready to wail on the market data...!";
-	exit;
-
-	my %cart; # Need to define cart!
-	my $total = 0;
-	my $mq = '=' x 40;
-	say "\n{$mq}\nShopping List for item: {0}\n{$mq}";
-	for %cart.keys -> $k {
-		say "$k:";
-		for @(%cart{$k}) -> $o {
-			say "\t{$o<station>.substr(0, 40)}\t\t$o<count>\t{commaize($o<unit_price>)}\t{commaize($o<subtotal>)}";
-			$total += $o<subtotal>;
-		}
-	}
-	say "{$mq}\nTOTAL INVOICE: {commaize($total)} ISK\n{$mq}";
+	actualMAIN(:$type_id, $sqlite);
 }
