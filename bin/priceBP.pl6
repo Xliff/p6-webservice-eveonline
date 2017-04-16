@@ -191,29 +191,36 @@ sub retrieveMarketData {
 	}
 }
 
-# sub resolveFitPricing {
-# 	my %cart;
-#
-# 	for %fit<_BYID_>.keys -> $k {
-# 		my $count = %fit<_BYID_>{$k}<count>;
-# 		my $idx = 0;
-# 		while ($count > 0) {
-# 			my $o = {
-# 				count =>
-# 					%market{$k}<sell>[$idx]<vol_remain> > $count
-# 					??
-# 					$count !! %market{$k}<sell>[$idx]<vol_remain>,
-# 				unit_price  => %market{$k}<sell>[$idx]<price>,
-# 				station     => %market{$k}<sell>[$idx++]<station_name>
-# 			};
-# 			$o<subtotal> = $o<unit_price> * $o<count>;
-# 			%cart{%fit<_BYID_>{$k}<name>}.push: $o;
-# 			$count -= $o<count>;
-# 		}
-# 	}
-#
-# 	%cart;
-# }
+sub getShoppingCart {
+	my %cart;
+
+	for %bp<materials>.list -> $i {
+		my $count := $i[1];
+		my ($minVol, $idx) = ($count / 10, 0);
+
+		while ($count > 0) {
+			my $k = $i[0];
+			unless %market{$k}<sell>[$idx]<vol_remain> > $minVol {
+				$idx++;
+				next;
+			}
+
+			my $o = {
+				count =>
+					%market{$k}<sell>[$idx]<vol_remain> > $count
+					??
+					$count !! %market{$k}<sell>[$idx]<vol_remain>,
+				unit_price  => %market{$k}<sell>[$idx]<price>,
+				station     => %market{$k}<sell>[$idx++]<station_name>
+			};
+			$o<subtotal> = $o<unit_price> * $o<count>;
+			%cart{ %inv{$k} }.push: $o;
+			$count -= $o<count>;
+		}
+	}
+
+	%cart;
+}
 
 # cw: Really need a module to say "comma-ize this number"
 sub commaize($_v) {
@@ -297,15 +304,16 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
 			fatal("ERROR! Could not retrieve item name with type_id.");
 		}
 	}
-	$item_name = $item_name.tc;
+	$item_name = $item_name.words.map({ .tc }).join(' ');
 
-	say "Ready to resolve fit based on pricing data...";
-	exit;
+	sub mq($a) {
+		say "{'=' x $a.chars}\n{$a}\n{'=' x $a.chars}";
+	};
 
-	my %cart; # Need to define cart!
+	my %cart = getShoppingCart;
 	my $total = 0;
-	my $mq = '=' x 40;
-	say "\n{$mq}\nShopping List for: {$item_name}\n{$mq}";
+
+	mq("Shopping List for: {$item_name}");
 	for %cart.keys -> $k {
 		say "$k:";
 		for @(%cart{$k}) -> $o {
@@ -313,7 +321,15 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
 			$total += $o<subtotal>;
 		}
 	}
-	say "{$mq}\nTOTAL INVOICE: {commaize($total)} ISK\n{$mq}";
+	mq("TOTAL INVOICE: {commaize($total)} ISK");
+
+	my @leftovers = %bp<materials>.grep: { $_[1] > 0 };
+	if (@leftovers) {
+		say "\n\nWARNING! -- Quantity requirements not met for the following items: ";
+		for @leftovers -> {
+			say "\t{ %inv{ $_[0] } }: { $_[1] }":
+		}
+	}
 }
 
 multi sub MAIN (Str :$type_name!, Str :$sqlite) {
