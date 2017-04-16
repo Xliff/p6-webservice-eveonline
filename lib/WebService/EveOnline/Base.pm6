@@ -8,7 +8,7 @@ class WebService::EveOnline::Base {
 	use Inline::Perl5;
 	use JSON::Fast;
 	use NativeCall;
-	
+
 	has $!response_file;
 	has $.http_client;
 	has $!cache_prefix;
@@ -22,8 +22,8 @@ class WebService::EveOnline::Base {
 		has int32 $.modtime is rw;
 	}
 
-	sub utime(Str $fn, utimebuf $t) 
-		returns int32 
+	sub utime(Str $fn, utimebuf $t)
+		returns int32
 		is native { ... };
 
 	submethod BUILD(
@@ -37,11 +37,11 @@ class WebService::EveOnline::Base {
 	) {
 		$!http_client = HTTP::UserAgent.new(:useragent(
 			$user_agent.defined ??
-				$user_agent 
-				!! 
+				$user_agent
+				!!
 				"WebService::EveOnline/HTTP::UserAgent/perl6"
 		));
-	
+
 		die "<cache_ttl> must be an integer value"
 			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
 
@@ -49,14 +49,14 @@ class WebService::EveOnline::Base {
 		$!cache_key = $cache_key if $cache_key.defined;
 		if ($!cache_ttl.defined || $!cache_key.defined) {
 			$!cache_prefix = $cache_prefix.defined ??
-				$cache_prefix 
-				!! 
+				$cache_prefix
+				!!
 				"{%*ENV<HOME>}/.ws_eve";
 
 			$!cache_prefix ~= "{$*SPEC.dir-sep}{$cache_prefix_add}"
 				if $cache_prefix_add.defined;
 
-			$!cache_date_interp = $cache_date_interp 
+			$!cache_date_interp = $cache_date_interp
 				if $cache_date_interp.defined;
 
 			$!cache_name_extract = $cache_name_extract.defined ??
@@ -86,9 +86,9 @@ class WebService::EveOnline::Base {
 		Code			:$cache_name_extract
 	) {
 		self.bless(
-			:$user_agent, 
-			:$cache_prefix, 
-			:$cache_prefix_add, 
+			:$user_agent,
+			:$cache_prefix,
+			:$cache_prefix_add,
 			:$cache_key,
 			:$cache_ttl,
 			:$cache_date_interp,
@@ -134,7 +134,7 @@ class WebService::EveOnline::Base {
 		#say "File modification time set to {$ttd.Str}";
 	}
 
-	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {		
+	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {
 		my $p5 = Inline::Perl5.new;
 
 		$p5.use('XML::Hash::XS');
@@ -158,14 +158,14 @@ class WebService::EveOnline::Base {
 					#say "R: {$response.content}";
 				} elsif ! $response.has-content {
 					#say "No response content";
-					
+
 					return;
 
 				}
 			}
 		}
 
-		my $ttd; 
+		my $ttd;
 		if $cache_key.defined || $cache_ttl.defined {
 			#say "Cache_key: {$!cache_key}" if $!cache_key.defined;
 
@@ -174,7 +174,7 @@ class WebService::EveOnline::Base {
 			if $cache_ttl.defined {
 				$ttd = DateTime.now.posix + $cache_ttl;
 			} elsif $cache_key.defined {
-				# cw: -YYY- Error checking?!? 
+				# cw: -YYY- Error checking?!?
 				$ttd = $retObj{$cache_key}:v;
 
 				if $ttd !~~ Int {
@@ -188,7 +188,7 @@ class WebService::EveOnline::Base {
 						#	  If user provides a default, can't we use that instead
 						#     of just die-ing, here?
 						#
-						#	  Could use <cache_ttl> as a fallback, but the 
+						#	  Could use <cache_ttl> as a fallback, but the
 						#     processing order will need to change.
 					}
 					$ttd = $ttd.posix if $ttd ~~ DateTime;
@@ -214,13 +214,13 @@ class WebService::EveOnline::Base {
 			} if $response !~~ HTTP::Response || $response.is-success;
 		}
 
-		return $retObj;		
+		return $retObj;
 	}
 
 	method makeRequest(
-		$url, 
-		:$method, 
-		:$header, 
+		$url,
+		:$method = GET,
+		:$header,
 		:$cache_ttl,
 		:$cache_key,
 		:$force,
@@ -228,11 +228,11 @@ class WebService::EveOnline::Base {
 	) {
 		my $response;
 
-		die "Invalid value passed as \$method" 
+		die "Invalid value passed as \$method"
 			unless $method ~~ RequestMethod;
 
-		die "Invalid extra header values passed" 
-			unless $header ~~ Hash;
+		die "Invalid extra header values passed"
+			unless !$header.defined || $header ~~ Hash;
 
 		my $cf;
 		if (
@@ -247,7 +247,7 @@ class WebService::EveOnline::Base {
 			#say "RF: {$!response_file}";
 
 			if $!response_file.IO.e {
-				# cw: Timestamp in the future indicates cache file 
+				# cw: Timestamp in the future indicates cache file
 				#     is still valid. Use it.
 				if $!response_file.IO.modified >= now {
 					my $h = $!response_file.IO.open(:r);
@@ -259,14 +259,14 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
-		$response = $method == GET ?? 
-			$!http_client.get($url,  :header(%( $header ))) 
-			!! 
+		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
+		$response = $method == GET ??
+			$!http_client.get($url,  :header(%( $header )))
+			!!
 			$!http_client.post($url, :header(%( $header )));
 
 		self.handleResponse(
-			$response, 
+			$response,
 			$json,
 			:cache_ttl($cache_ttl // $!cache_ttl)
 			:cache_key($cache_key // $!cache_key)
