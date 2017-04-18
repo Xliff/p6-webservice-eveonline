@@ -11,6 +11,7 @@ my %inv;
 my %bp;
 my %mats;
 my %market;
+my %options;
 
 enum Filter <
 	NONE
@@ -290,7 +291,9 @@ sub openStaticDB($sqlite) {
 }
 
 sub getIDs(Int $typeID) {
-	say "Fetching blueprint data (type_id = $typeID) ...";
+	my $me = '';
+	$me = "(ME = { %options<me> * 100 }) " if %options<me>.defined;
+	say "Fetching blueprint data {$me}(type_id = {$typeID}) ...";
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
 		SELECT typeId, activityId, materialTypeId, quantity
 		FROM industryActivityMaterials
@@ -299,7 +302,10 @@ sub getIDs(Int $typeID) {
 
 	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
-		%bp<materials>.push: [ $r[2], $r[3] ] if $r[1] == 1;
+		%bp<materials>.push: [
+			$r[2],
+			$r[3] * (1 - (%options<me> // 0))			# ME reduction
+		] if $r[1] == 1;
 	}
 	$sth.finish;
 
@@ -318,7 +324,10 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub actualMAIN(:$type_id, :$bpname, :$sqlite, *%filter) {
+sub actualMAIN(:$type_id, :$bpname, :$sqlite, :$me) {
+	# Process slurped options.
+	%options<me> = $me * 0.01 if $me.defined;
+
 	openStaticDB($sqlite);
 	getIDs($type_id);
 	retrieveMarketData;
@@ -371,7 +380,7 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, *%filter) {
 	}
 }
 
-multi sub MAIN (Str :$type_name!, Str :$sqlite, *%filter) {
+multi sub MAIN (Str :$type_name!, Str :$sqlite, Int :$me, *%foo) {
 	openStaticDB($sqlite);
 
 	my $bpname = $type_name;
@@ -398,9 +407,9 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%filter) {
 		fatal("No item found matching '$bpname'.\n") unless $type_id.defined;
 	}
 
-	actualMAIN(:$type_id, :$bpname, :$sqlite);
+	actualMAIN(:$type_id, :$bpname, :$sqlite, :$me);
 }
 
-multi sub MAIN (Int :$type_id!, Str :$sqlite, *%filter) {
-	actualMAIN(:$type_id, $sqlite, %filter);
+multi sub MAIN (Int :$type_id!, Str :$sqlite, Int :$me) {
+	actualMAIN(:$type_id, $sqlite, :$me);
 }
