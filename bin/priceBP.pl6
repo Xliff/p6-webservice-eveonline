@@ -20,6 +20,7 @@ enum Filter <
 	SECLEV_GT
 	SECLEV_LT
 	SECLEV_EQ
+	SECLEV_BT
 >;
 
 my @hubs = <<
@@ -39,23 +40,31 @@ sub fatal($msg) {
 	exit;
 }
 
+# cw: For re-use, should use @type_ids, and %filter.
+#     also, remove static @avoidance, as that will eventually be a part
+#     of %filter.
 sub retrieveMarketData {
 	my $ec = WebService::EveOnline::EveCentral.new;
 
-	my Filter $filter = HUB;
+	#my Filter $filter = HUB;
+	my Filter $filter = STATION;
+	my ($min_seclev, $max_seclev);
 	my $seclev = 0.5;
 	my $region;
-	my $station;
+	#my $station = 60005686;    # Hek
+	#my $station = 60003760; #Jita
+	my $station = 60004588;  #Rens
 	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
-	my @avoidance = (60003760, 60012412);
+	#my @avoidance = (60003760, 60012412);
+	my @avoidance;
 
 	for %bp<materials>.map( { $_[0] } ) -> $k {
-		say "Retrieving Data for item '{ %inv{$k} }'";
+		say "\t{ %inv{$k} }...";
 		my %m = $ec.quickLook(:typeID($k));
 
 		# Filter, here -- seclev is easy...
 		#	for markethubs, will need to get the station IDs:
-		#	     Jita - 60003760
+		#	       Jita - 60003760
 		#        Hek  - 60005686
 		# 	    Amarr - 60008494
 		#  	  Dodixie - 60011866
@@ -135,6 +144,30 @@ sub retrieveMarketData {
 						}
 			}
 
+			when SECLEV_BT {
+				%m<quicklook><sell_orders><order> =
+					%m<quicklook><sell_orders><order>.grep:
+						{
+							$_.defined &&
+								$_<security> <= $min_seclev
+								&&
+								$_<security> >= $max_seclev
+								&&
+								$_<station> !== any(@avoidance)
+						}
+
+				%m<quicklook><sell_orders><order> =
+					%m<quicklook><sell_orders><order>.grep:
+						{
+							$_.defined &&
+								$_<security> <= $min_seclev
+								&&
+								$_<security> >= $max_seclev
+								&&
+								$_<station> !== any(@avoidance)
+						}
+			}
+
 			when SECLEV_LT {
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
@@ -186,8 +219,10 @@ sub retrieveMarketData {
 				$^b<vol_remain> <=> $^a<vol_remain>
 		};
 
-		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort: $sorter;
-		%market{$k}<buy>  = %m<quicklook><buy_orders><order>.sort:  $sorter;
+		# cw: These must be containerized, otherwise it returns a Seq, which will
+		#     really fuck things up.
+		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort( $sorter ).list;
+		%market{$k}<buy>  = %m<quicklook><buy_orders><order>.sort(  $sorter ).list;
 	}
 }
 
@@ -195,13 +230,14 @@ sub getShoppingCart {
 	my %cart;
 
 	for %bp<materials>.list -> $i {
+		my $k = $i[0];
 		my $count := $i[1];
-		my ($minVol, $idx) = ($count / 10, 0);
+		my $minVol= $count / 10;
+		my $idx = 0;
 
-		while ($count > 0) {
-			my $k = $i[0];
-			unless %market{$k}<sell>[$idx]<vol_remain> > $minVol {
-				$idx++;
+		while ($count > 0 && $idx < %market{$k}<sell>.elems ) {
+			unless (%market{$k}<sell>[$idx]<vol_remain> // 1) > $minVol {
+				say "Skipping order #{ %market{$k}<sell>[$idx++]<id> } for small volume...";
 				next;
 			}
 
@@ -213,6 +249,7 @@ sub getShoppingCart {
 				unit_price  => %market{$k}<sell>[$idx]<price>,
 				station     => %market{$k}<sell>[$idx++]<station_name>
 			};
+
 			$o<subtotal> = $o<unit_price> * $o<count>;
 			%cart{ %inv{$k} }.push: $o;
 			$count -= $o<count>;
@@ -262,7 +299,7 @@ sub getIDs(Int $typeID) {
 
 	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
-		%bp<materials>.push: [ $r[2], $r[3] ];
+		%bp<materials>.push: [ $r[2], $r[3] ] if $r[1] == 1;
 	}
 	$sth.finish;
 
@@ -281,7 +318,7 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
+sub actualMAIN(:$type_id, :$bpname, :$sqlite, *%filter) {
 	openStaticDB($sqlite);
 	getIDs($type_id);
 	retrieveMarketData;
@@ -304,7 +341,7 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
 			fatal("ERROR! Could not retrieve item name with type_id.");
 		}
 	}
-	$item_name = $item_name.words.map({ .tc }).join(' ');
+	$item_name = $item_name.wordcase;
 
 	sub mq($a) {
 		say "{'=' x $a.chars}\n{$a}\n{'=' x $a.chars}";
@@ -312,27 +349,29 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite) {
 
 	my %cart = getShoppingCart;
 	my $total = 0;
-
-	mq("Shopping List for: {$item_name}");
-	for %cart.keys -> $k {
-		say "$k:";
-		for @(%cart{$k}) -> $o {
-			say "\t{$o<station>.substr(0, 40)}\t\t$o<count>\t{commaize($o<unit_price>)}\t{commaize($o<subtotal>)}";
-			$total += $o<subtotal>;
-		}
-	}
-	mq("TOTAL INVOICE: {commaize($total)} ISK");
-
 	my @leftovers = %bp<materials>.grep: { $_[1] > 0 };
+
+	if %cart {
+		mq("Shopping List for: {$item_name}");
+		for %cart.keys -> $k {
+			say "$k:";
+			for @(%cart{$k}) -> $o {
+				say "\t{$o<station>.substr(0, 40)}\t\t$o<count>\t{commaize($o<unit_price>)}\t{commaize($o<subtotal>)}";
+				$total += $o<subtotal>;
+			}
+		}
+		mq("{ @leftovers ?? 'INCOMPLETE' !! 'TOTAL' } INVOICE: {commaize($total)} ISK");
+	}
+
 	if (@leftovers) {
 		say "\n\nWARNING! -- Quantity requirements not met for the following items: ";
-		for @leftovers -> {
-			say "\t{ %inv{ $_[0] } }: { $_[1] }":
+		for @leftovers -> $i {
+			say "\t{ %inv{ $i[0] } }: { $i[1] }":
 		}
 	}
 }
 
-multi sub MAIN (Str :$type_name!, Str :$sqlite) {
+multi sub MAIN (Str :$type_name!, Str :$sqlite, *%filter) {
 	openStaticDB($sqlite);
 
 	my $bpname = $type_name;
@@ -362,6 +401,6 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite) {
 	actualMAIN(:$type_id, :$bpname, :$sqlite);
 }
 
-multi sub MAIN (Int :$type_id!, Str :$sqlite) {
-	actualMAIN(:$type_id, $sqlite);
+multi sub MAIN (Int :$type_id!, Str :$sqlite, *%filter) {
+	actualMAIN(:$type_id, $sqlite, %filter);
 }
