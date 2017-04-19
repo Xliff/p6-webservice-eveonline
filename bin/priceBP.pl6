@@ -12,6 +12,7 @@ my %bp;
 my %mats;
 my %market;
 my %options;
+my %existing;
 
 enum Filter <
 	NONE
@@ -54,9 +55,10 @@ sub retrieveMarketData {
 	my $region;
 	#my $station = 60005686;    # Hek
 	#my $station = 60003760; #Jita
-	my $station = 60004588;  #Rens
+	#my $station = 60004588;  #Rens
 	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 	#my @avoidance = (60003760, 60012412);
+	my @stations = (60005686, 60004588);
 	my @avoidance;
 
 	for %bp<materials>.map( { $_[0] } ) -> $k {
@@ -116,13 +118,14 @@ sub retrieveMarketData {
 			}
 
 			when STATION {
+				# cw: When done this way, HUB is just STATION with a predefined list.
 				%m<quicklook><sell_orders><order> =
 					%m<quicklook><sell_orders><order>.grep:
-						{ $_.defined && $_<station> == $station; }
+						{ $_.defined && $_<station> == any(@stations); }
 
 				%m<quicklook><buy_orders><order> =
 					%m<quicklook><buy_orders><order>.grep:
-						{ $_.defined && $_<station> == $station; }
+						{ $_.defined && $_<station> == any(@stations); }
 			}
 
 			when SECLEV_GT {
@@ -227,6 +230,51 @@ sub retrieveMarketData {
 	}
 }
 
+# cw: -YY- This code should be moved into a module for reuse!!
+sub getEveItem($lookup) {
+	# cw: Best way to load ICU extension for proper non-ASCII operation, anyone?
+	my $sth;
+	given $lookup {
+		when Str {
+			 $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+				SELECT *
+				FROM invTypes
+				WHERE
+					LOWER(typeName) = ?
+		  STATEMENT
+
+			$sth.execute($lookup.lc);
+		}
+
+		when Int {
+			$sth = $sq_dbh.prepare(q:to/STATEMENT/);
+				SELECT *
+				FROM invTypes
+				WHERE
+					typeID = ?
+		  STATEMENT
+
+			$sth.execute($lookup);
+		}
+
+		default {
+			# cw: Coding error, not execution, so use die()
+			die "ERROR! Illegal parameter type in getEveItem: { $lookup.WHAT }";
+		}
+	}
+
+	my $type_id;
+	my @result = $sth.allrows(:array-of-hash);
+	if @result.elems == 1 {
+		return @result[0];
+	} elsif @result.elems > 1 {
+		# This should never happen, but we should balk if it does!
+		fatal("ERROR! Got more than one item with that name, which should not happen!\n");
+	}
+
+	Nil;
+}
+
 sub getShoppingCart {
 	my %cart;
 
@@ -302,10 +350,9 @@ sub getIDs(Int $typeID) {
 
 	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
-		%bp<materials>.push: [
-			$r[2],
-			$r[3] * (1 - (%options<me> // 0))			# ME reduction
-		] if $r[1] == 1;
+		my $needed = $r[3] * (1 - (%options<me> // 0));			# with ME reduction
+		$needed -= %inv{ $r[2] } if %inv{ $r[2] }.defined;
+		%bp<materials>.push: [ $r[2], $needed ] if $r[1] == 1 && $needed > 0;
 	}
 	$sth.finish;
 
@@ -324,9 +371,25 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub actualMAIN(:$type_id, :$bpname, :$sqlite, :$me) {
+sub getExisting($inv) {
+	say "Checking existing items...";
+	for $inv.list -> $i {
+		my ($item, $cnt) = $i.split(',');
+		my $ei = getEveItem($item);
+
+		fatal("Item { $item } not a valid Eve Inventory item!")
+			unless $ei.defined;
+
+		%inv{ $ei<typeID> } = $cnt;
+	}
+}
+
+sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 	# Process slurped options.
-	%options<me> = $me * 0.01 if $me.defined;
+	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;
+
+	# Process existing inventory, if specified.
+	getExisting(%extras<existing>) if %extras<existing>.defined;
 
 	openStaticDB($sqlite);
 	getIDs($type_id);
@@ -380,36 +443,18 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :$me) {
 	}
 }
 
-multi sub MAIN (Str :$type_name!, Str :$sqlite, Int :$me, *%foo) {
+multi sub MAIN (Str :$type_name!, Str :$sqlite, Int :$me, *%extras) {
 	openStaticDB($sqlite);
 
 	my $bpname = $type_name;
 	$bpname ~= " Blueprint" unless $bpname ~~ m:i/Blueprint$/;
 
-	# cw: Best way to load ICU extension for proper non-ASCII operation, anyone?
-	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-		SELECT typeID
-		FROM invTypes
-		WHERE
-			LOWER(typeName) = ?
-  STATEMENT
+	my $item = getEveItem($bpname);
+	fatal("No item found matching '$bpname'.\n") unless $item.defined;
 
-	$sth.execute($bpname.lc);
-
-	my $type_id;
-	my @result = $sth.allrows;
-	if @result.elems == 1 {
-		$type_id = @result[0][0];
-	} elsif @result.elems > 1 {
-		# This should never happen, but we should balk if it does!
-		fatal("ERROR! Got more than one item with that name, which should not happen!\n");
-	} else {
-		fatal("No item found matching '$bpname'.\n") unless $type_id.defined;
-	}
-
-	actualMAIN(:$type_id, :$bpname, :$sqlite, :$me);
+	actualMAIN(:type_id( $item<typeID> ), :$bpname, :$sqlite, :%extras);
 }
 
-multi sub MAIN (Int :$type_id!, Str :$sqlite, Int :$me) {
-	actualMAIN(:$type_id, $sqlite, :$me);
+multi sub MAIN (Int :$type_id!, Str :$sqlite, *%extras) {
+	actualMAIN(:$type_id, :$sqlite, :%extras);
 }
