@@ -81,7 +81,7 @@ class WebService::EveOnline::Base {
 		Str 			:$cache_prefix,
 		Str 			:$cache_prefix_add,
 		Str 			:$cache_key,
-		Str     		:$cache_ttl,
+		Str       :$cache_ttl,
 		Code			:$cache_date_interp,
 		Code			:$cache_name_extract
 	) {
@@ -198,7 +198,8 @@ class WebService::EveOnline::Base {
 			#say "TTD: [{$ttd}]";
 
 			# Force the return data into a hash, if necessary.
-			if $retObj !~~ Hash {
+			# Check for both Inline::Perl5 and Perl6 variants.
+			if $retObj !~~ Hash && $retObj !~~ Inline::Perl5::Perl5Hash {
 				$retObj = { data => $retObj };
 			}
 
@@ -221,8 +222,8 @@ class WebService::EveOnline::Base {
 		$url,
 		:$method = GET,
 		:$header,
-		:$cache_ttl,
-		:$cache_key,
+		:$cache_ttl = $!cache_ttl,
+		:$cache_key = $!cache_key,
 		:$force,
 		:$json
 	) {
@@ -237,7 +238,7 @@ class WebService::EveOnline::Base {
 		my $cf;
 		if (
 			! $force.defined								&&
-			($!cache_ttl.defined || $!cache_key.defined)	&&
+			($cache_ttl.defined || $cache_key.defined)	&&
 			($cf = $!cache_name_extract($url)).defined
 		) {
 			#say "CF: {$cf}";
@@ -268,8 +269,8 @@ class WebService::EveOnline::Base {
 		self.handleResponse(
 			$response,
 			$json,
-			:cache_ttl($cache_ttl // $!cache_ttl)
-			:cache_key($cache_key // $!cache_key)
+			:$cache_ttl,
+			:$cache_key
 		);
 	}
 
