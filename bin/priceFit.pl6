@@ -38,8 +38,8 @@ multi sub readFit(Str $fn) {
 		return;
 	}
 
-	my $fh = $fn.IO.open(:r) 
-		or 
+	my $fh = $fn.IO.open(:r)
+		or
 	die "Cannot open fittings file file '$fn'";
 
 	readFit($fh);
@@ -63,12 +63,12 @@ sub realReadFit(Str $f) {
 
 		if ($l ~~ /^(<-[,]>+)/) {
 			my $name = $/[0].Str;
-			
+
 			my $num;
 			if ($name ~~ /' ' x (\d+)$/) {
 				$num = $/[0].Str;
 				$name ~~ s/' ' x \d+$//;
-			} 
+			}
 
 			# cw: If the data already exists, we can safely increment without having
 			#     to worry about the presence of the " x###" value.
@@ -84,12 +84,12 @@ sub realReadFit(Str $f) {
 }
 
 sub addFitIDs {
-	# cw: REALLY wish the syntax highlighting in Sublime Text didn't 
+	# cw: REALLY wish the syntax highlighting in Sublime Text didn't
 	#     break with a valid Perl6 HereDoc
 	my $SQL = "
 		SELECT typeID, typeName
-		FROM invTypes 
-		WHERE 
+		FROM invTypes
+		WHERE
 			typeName IN ( { ('?' xx %fit.keys).join(',') } )
 			AND
 			typeId IS NOT NULL
@@ -138,103 +138,103 @@ sub retrieveMarketData {
 		#        Agil - 60012412
 		given $filter {
 			when HUB {
-				%m<quicklook><sell_orders><order> = 
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+				%m<quicklook><sell_orders><order> =
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<station> == any(@hubs)
-							&& 
-							$_<station> !== any(@avoidance) 
-						} 
+							&&
+							$_<station> !== any(@avoidance)
+						}
 
-				%m<quicklook><buy_orders><order> = 
-					%m<quicklook><buy_orders><order>.grep: 
-						{ 
+				%m<quicklook><buy_orders><order> =
+					%m<quicklook><buy_orders><order>.grep:
+						{
 							$_<station> == any(@hubs)
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 			}
 
 			# cw: Consider how these could implement multiple values
 			when REGION {
-				%m<quicklook><sell_orders><order> = 
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+				%m<quicklook><sell_orders><order> =
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<region> == $region
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 
-				%m<quicklook><buy_orders><order> = 
-					%m<quicklook><buy_orders><order>.grep: 
-						{ 
-							$_<region> == $region 
-							&& 
-							$_<station> !== any(@avoidance) 
+				%m<quicklook><buy_orders><order> =
+					%m<quicklook><buy_orders><order>.grep:
+						{
+							$_<region> == $region
+							&&
+							$_<station> !== any(@avoidance)
 						}
 			}
 
 			when STATION {
-				%m<quicklook><sell_orders><order> = 
-					%m<quicklook><sell_orders><order>.grep: 
+				%m<quicklook><sell_orders><order> =
+					%m<quicklook><sell_orders><order>.grep:
 						{ $_<station> == $station; }
 
-				%m<quicklook><buy_orders><order> = 
-					%m<quicklook><buy_orders><order>.grep: 
+				%m<quicklook><buy_orders><order> =
+					%m<quicklook><buy_orders><order>.grep:
 						{ $_<station> == $station; }
 			}
 
 			when SECLEV_GT {
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> >= $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> >= $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 			}
 
 			when SECLEV_LT {
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> <= $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> <= $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 			}
 
 			when SECLEV_EQ {
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> == $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 
 				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep: 
-						{ 
+					%m<quicklook><sell_orders><order>.grep:
+						{
 							$_<security> == $seclev
-							&& 
-							$_<station> !== any(@avoidance) 
+							&&
+							$_<station> !== any(@avoidance)
 						}
 			}
 
@@ -244,13 +244,13 @@ sub retrieveMarketData {
 		}
 
 		# Sort from cheapest to highest for sell orders.
-		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort: { 
-			$^a<price> <=> $^b<price> 
+		%market{$k}<sell> = %m<quicklook><sell_orders><order>.sort: {
+			$^a<price> <=> $^b<price>
 		};
 
 		# Sort from highest to lowest for buy order.
-		%market{$k}<buy> = %m<quicklook><buy_orders><order>.sort: { 
-			$^b<price> <=> $^a<price> 
+		%market{$k}<buy> = %m<quicklook><buy_orders><order>.sort: {
+			$^b<price> <=> $^a<price>
 		};
 	}
 }
@@ -263,9 +263,9 @@ sub resolveFitPricing {
 		my $idx = 0;
 		while ($count > 0) {
 			my $o = {
-				count => 
-					%market{$k}<sell>[$idx]<vol_remain> > $count 
-					?? 
+				count =>
+					%market{$k}<sell>[$idx]<vol_remain> > $count
+					??
 					$count !! %market{$k}<sell>[$idx]<vol_remain>,
 				unit_price  => %market{$k}<sell>[$idx]<price>,
 				station     => %market{$k}<sell>[$idx++]<station_name>
@@ -298,8 +298,8 @@ sub MAIN (:$filename!, :$sqlite) {
 		'SQLite',
 		:database($sq_file),
 		:PrintError(True)
-	) 
-	or 
+	)
+	or
 	die "Cannot open static Eve data!";
 
 	die "Fit file does not exist" unless $filename.IO.e;

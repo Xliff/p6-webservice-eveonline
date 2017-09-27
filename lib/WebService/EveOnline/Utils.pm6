@@ -14,14 +14,14 @@ grammar Cookie_Grammar {
         <name> '=' <value>? ';'? \s* <extras>*
     }
     token extras {
-    	\s* [ 
+    	\s* [
     		<expires> || <path> || <secure> || <httponly>
 		] ';'?
 	}
     token separator { <[()<>@,;:\"/\[\]?={}\s\t]> }
     token name     { <[\S] - [()<>@,;:\"/\[\]?={}]>+ }
     token value    { <-[;]>+ }
-    token expires  { [ 'expires' || 'max-age' ] '=' <value> ';' } 
+    token expires  { [ 'expires' || 'max-age' ] '=' <value> ';' }
     token path     { 'path=' <value> ';' }
     token arg      { <name> '=' <value> ';'? }
     token secure   { :i Secure ';'? }
@@ -29,7 +29,7 @@ grammar Cookie_Grammar {
 }
 
 sub urlEncode($s) is export {
-	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g); 
+	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g);
 }
 
 sub prepParams($l) is export {
@@ -50,7 +50,7 @@ sub cookieExtraVal($c, $f) is export {
 
 sub getCookies($r) is export {
 	my @cookies;
-	my $broken_cookies = 
+	my $broken_cookies =
 		$r.header.field('Set-Cookie').values.
 		join(' ');
 	$broken_cookies ~~ s:g/( 'path=/' || 'secure' ) \s/$0; /;
@@ -64,7 +64,7 @@ sub getCookies($r) is export {
 				next unless $dt > DateTime.now;
 			}
 		}
-		
+
 		@cookies.push(HTTP::Cookie.new(
 			name 		=> $c<name>.Str,
 			value 		=> ($c<value> // '').Str,
@@ -78,14 +78,14 @@ sub getCookies($r) is export {
 	@cookies;
 }
 
-sub makeRequestStatic($url) {
+sub makeRequestStatic($url) is export {
 	# cw: Eventually to go behind a DEBUG flag.
 	say "Requesting: $url";
-	
+
 	my $response = HTTP::UserAgent.new.get($url);
 
 	die "Request failed with unexpected error."
 		unless $response ~~ HTTP::Response && $response.is-success;
-		
+
 	from-json($response.content);
 }

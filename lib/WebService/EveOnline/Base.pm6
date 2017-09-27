@@ -9,6 +9,7 @@ class WebService::EveOnline::Base {
 	use JSON::Fast;
 	use NativeCall;
 
+  has $!last-response;
 	has $!response_file;
 	has $.http_client;
 	has $!cache_prefix;
@@ -66,7 +67,7 @@ class WebService::EveOnline::Base {
 		}
 	}
 
-	sub default_cache_name_extract($u) {
+	sub default_cache_name_extract($s, $u) {
 		my $mu = $u;
 		return unless $mu ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/;
 		$mu = $/[0].Str;
@@ -137,6 +138,8 @@ class WebService::EveOnline::Base {
 	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {
 		my $p5 = Inline::Perl5.new;
 
+		$!last-response = $response;
+
 		$p5.use('XML::Hash::XS');
 
 		my $retObj;
@@ -175,7 +178,16 @@ class WebService::EveOnline::Base {
 				$ttd = DateTime.now.posix + $cache_ttl;
 			} elsif $cache_key.defined {
 				# cw: -YYY- Error checking?!?
-				$ttd = $retObj{$cache_key}:v;
+				$ttd =  $cache_key ~~ /^^ 'header:' (.+)/ ??
+				  # cw: This is problematic.
+					do {
+						given $response.header.field(~$0).values {
+							when Str   { $_ }
+							when Array { $_.join(', ') }
+						}
+					}
+				  !!
+					($retObj{$cache_key}:v);
 
 				if $ttd !~~ Int {
 					# Parse date using subclass defined function.
@@ -218,7 +230,7 @@ class WebService::EveOnline::Base {
 		return $retObj;
 	}
 
-	method makeRequest(
+	multi method makeRequest(
 		$url,
 		:$method = GET,
 		:$header,
@@ -229,17 +241,19 @@ class WebService::EveOnline::Base {
 	) {
 		my $response;
 
+		my $useMethod = $method // GET;
+
 		die "Invalid value passed as \$method"
-			unless $method ~~ RequestMethod;
+			unless $useMethod ~~ RequestMethod;
 
 		die "Invalid extra header values passed"
 			unless !$header.defined || $header ~~ Hash;
 
 		my $cf;
 		if (
-			! $force.defined								&&
+			! $force.defined														&&
 			($cache_ttl.defined || $cache_key.defined)	&&
-			($cf = $!cache_name_extract($url)).defined
+			($cf = $!cache_name_extract(self, $url)).defined
 		) {
 			#say "CF: {$cf}";
 
@@ -261,7 +275,7 @@ class WebService::EveOnline::Base {
 		}
 
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
-		$response = $method == GET ??
+		$response = $useMethod == GET ??
 			$!http_client.get($url,  :header(%( $header )))
 			!!
 			$!http_client.post($url, :header(%( $header )));
@@ -278,5 +292,17 @@ class WebService::EveOnline::Base {
 		my $response = $form.run;
 
 		return self.handleResponse($response, $json);
+	}
+
+	method cache_ttl {
+		$!cache_ttl;
+	}
+
+	method last-response {
+		$!last-response;
+	}
+
+	method setCacheNameFunc($f) {
+		$!cache_name_extract = $f;
 	}
 }

@@ -25,7 +25,7 @@ class WebService::EveOnline::CREST::Map {
 		);
 	}
 
-	# cw: Data retrieval will need to account for some classes 
+	# cw: Data retrieval will need to account for some classes
 	#     may not need an SSO!!
 
 	method constellations {
@@ -39,7 +39,7 @@ class WebService::EveOnline::CREST::Map {
 	method constellation(Int $constellationId) {
 		# 1 hour cache
 
-		# Constellation IDs for K-space start above 20000000, 
+		# Constellation IDs for K-space start above 20000000,
 		# and IDs for W-space start above 21000000.
 		self.makeRequest(
 			"{ $.request-prefix }/constellations/{ $constellationId }/",
@@ -65,7 +65,7 @@ class WebService::EveOnline::CREST::Map {
 	method planet(Int $planetId) {
 		# 1 hour cache
 
-		# Constellation IDs for K-space start above 20000000, 
+		# Constellation IDs for K-space start above 20000000,
 		# and IDs for W-space start above 21000000.
 		self.makeRequest(
 			"{ $.request-prefix }/planets/{ $planetId }/",
@@ -100,7 +100,7 @@ class WebService::EveOnline::CREST::Map {
 	method region(Int $regionId) {
 		# 1 hour cache
 
-		# Region IDs for K-space start above 10000000, 
+		# Region IDs for K-space start above 10000000,
 		# and IDs for W-space start above 11000000.
 		self.makeRequest(
 			"{ $.request-prefix }/regions/{ $regionId }",

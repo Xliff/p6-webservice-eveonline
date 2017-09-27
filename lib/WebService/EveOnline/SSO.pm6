@@ -11,8 +11,8 @@ class WebService::EveOnline::SSO {
 
 	use WebService::EveOnline::Utils;
 
-	# cw: Please note that there are places where I use backslash to quote 
-	#     characters in regexes. This is solely due to not screw up the 
+	# cw: Please note that there are places where I use backslash to quote
+	#     characters in regexes. This is solely due to not screw up the
 	#     syntactical highlighting in the editor I use for development.
 
 	constant PREFIX = "https://login.eveonline.com/";
@@ -37,7 +37,7 @@ class WebService::EveOnline::SSO {
 		);
 
 		$!postclient = HTTP::UserAgent.new(
-			:max-redirects(0), 
+			:max-redirects(0),
 			:useragent<WebService::Eve v0.0.1 (rakudo)>
 		);
 
@@ -53,7 +53,7 @@ class WebService::EveOnline::SSO {
 	method !encodeAuth {
 		encode-base64(
 			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
-		);	
+		);
 	}
 
 	method !getPrivateData {
@@ -89,7 +89,7 @@ class WebService::EveOnline::SSO {
 		my $url;
 		my $response;
 		try {
-			# cw: This doesn't seem to follow the same pattern as the last 
+			# cw: This doesn't seem to follow the same pattern as the last
 			#     request. There may not be an exception, here.
 			CATCH {
 				when X::HTTP::Response { .resume }
@@ -97,10 +97,10 @@ class WebService::EveOnline::SSO {
 
 			$response = $!postclient.post($formUrl, $form_data);
 			# cw: We've rolled our own until a fix can be made for HTTP::UserAgent
-			#     Probably has to do with early expiration or parsing in 
+			#     Probably has to do with early expiration or parsing in
 			#     HTTP::Cookies.
 			my @cookies = getCookies($response);
-			
+
 			# cw: This will be a redirect, but it needs to be a GET, not
 			#     a POST.
 			for @cookies -> $c {
@@ -110,7 +110,7 @@ class WebService::EveOnline::SSO {
 				$!client.cookies.push-cookie($c);
 				$!postclient.cookies.push-cookie($c);
 			}
-			
+
 			# cw: Not optimal, but this should generally work for the servers
 			#     we connect to.
 			$url = $response.header.field('Location');
@@ -120,8 +120,9 @@ class WebService::EveOnline::SSO {
 			}
 
 			# cw: -YYY-
-			#     At this point, if URL has "/Account/LogOn" in it, then we've 
+			#     At this point, if URL has "/Account/LogOn" in it, then we've
 			#     failed the authorization phase and should throw an exception.
+			say "U: $url";
 		}
 
 		try {
@@ -152,11 +153,11 @@ class WebService::EveOnline::SSO {
 		die "No characters exist on this account!\n" unless @options.elems;
 
 		my $input = '';
-		my %toons = do for @options { 
+		my %toons = do for @options {
 			if (%!privateData<CHARACTER> // '') eq $_[0].text {
 				$input = $_<value>;
 			}
-			$_[0].text => $_<value> 
+			$_[0].text => $_<value>
 		};
 		unless $input.chars {
 			my @names = %toons.keys;
@@ -168,15 +169,15 @@ class WebService::EveOnline::SSO {
 				for @names.kv -> $i, $n {
 					say "{ $i + 1 }: $n";
 				}
-				while 
-					!$input.chars 	|| 
+				while
+					!$input.chars 	||
 					$input ~~ /\D/ 	||
-					( $input.Int < 0 && $input.Int > @names.end ) 
+					( $input.Int < 0 && $input.Int > @names.end )
 				{
 					$input = prompt "\nEnter your selection [or 0 to exit]: ";
 					say "Invalid selection! Please try again or enter 0 to quit"
-						if 
-							$input ~~ /\D/ && 
+						if
+							$input ~~ /\D/ &&
 							($input.Int < 0 && $input.Int > @names.end);
 					die "Exiting" if !$input.Int;
 					$input = %toons{@names[$input - 1]};
@@ -208,11 +209,11 @@ class WebService::EveOnline::SSO {
 			}
 
 			$response = $!postclient.post($formUrl, $form_data);
-		
+
 			# cw: This will be a redirect, but it needs to be a GET, not
 			#     a POST.
 
-			#     The problem here is that the cookes are MANGLED in the 
+			#     The problem here is that the cookes are MANGLED in the
 			#     header.
 
 			my $respHash = $response.header.hash;
@@ -234,8 +235,8 @@ class WebService::EveOnline::SSO {
 
 	method !getBearerToken($form_data) {
 		$!postclient.post(
-			"{ PREFIX }/oauth/token", 
-			$form_data, 
+			"{ PREFIX }/oauth/token",
+			$form_data,
 			:Authorization("Basic { self!encodeAuth }"),
 		);
 	}
@@ -243,21 +244,21 @@ class WebService::EveOnline::SSO {
 	method !setTokenData($newTokenData) {
 		$!tokenData = $newTokenData;
 		$!lastTokenDate = DateTime.now;
-		$!expires = $.lastTokenDate.later(:seconds($.tokenData.expires_in));
+		$!expires = $.lastTokenDate.later(:seconds($.tokenData<expires_in>));
 	}
 
 	method getHeader {
 		{
-			Authorization => "Bearer { $.tokenData.access_token }"
+			Authorization => "Bearer { $.tokenData<access_token> }"
 		};
 	}
-	
+
 	method getToken {
 		my $state;
 
 		# cw: Should throw an exception, instead.
 		die "Missing required private parameters"
-			unless 
+			unless
 				%.privateData<client_id>.defined &&
 				%.privateData<secret_id>.defined &&
 				%.privateData<username>.defined  &&
@@ -279,9 +280,9 @@ class WebService::EveOnline::SSO {
 		die "HTTP request to '$url' failed!" unless $response.is-success;
 
 		my $tokenCode;
-				
+
 		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
-		my @fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>); 
+		my @fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>);
 		my @sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
 		for |(@fields, @sel).flat -> $f {
@@ -289,15 +290,14 @@ class WebService::EveOnline::SSO {
 			%!fieldsInForm{$f<name>} = 1;
 		}
 
-		$response = self!handleLogin 
-			if 
-				%!fieldsInForm<UserName> 			&& 
+		$response = self!handleLogin
+			if
+				%!fieldsInForm<UserName> 			&&
 				%!fieldsInForm<Password> 			&&
-				%!fieldsInForm<RememberMe>			&&
-				%!fieldsInForm<ClientIdentifier>;
-		
+				%!fieldsInForm<RememberMe>;
+
 		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
-		@fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>); 
+		@fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>);
 		@sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
 		%!fieldsInForm = ();
@@ -306,10 +306,10 @@ class WebService::EveOnline::SSO {
 			%!fieldsInForm{$f<name>} = 1;
 		}
 
-		$response = self!handleCharSelect 
+		$response = self!handleCharSelect
 			if %!fieldsInForm<CharacterId>;
 
-		# At this point, the redirect should contain a code parameter. 
+		# At this point, the redirect should contain a code parameter.
 		# Search for it.
 		my $loc = $response.header.field('Location') // '';
 		if $loc ~~ / code\= (<-[ & ]>+) / {
@@ -318,11 +318,11 @@ class WebService::EveOnline::SSO {
 
 		# cw: Should be an exception
 		die "Could not find tokenCode in response data"
-			unless $tokenCode.chars;
+			unless $tokenCode;
 
 		my $form_data = {
 			grant_type	=> 'authorization_code',
-			code 		=> $tokenCode, 
+			code 				=> $tokenCode,
 		};
 		$response = self!getBearerToken($form_data);
 
@@ -331,8 +331,9 @@ class WebService::EveOnline::SSO {
 			unless $response.is-success;
 
 		# cw: Maybe add code to output response if a flag is set?
-		die "Invalid response content-type."
-			unless $response.fields('Content-Type')  eq 'application/json';
+		my $ct = $response.content-type;
+		die "Invalid response content-type '$ct'. "
+			unless $ct ~~ / ^^ 'application/json' /;
 
 		my $jsonObj = from-json($response.content);
 		self!setTokenData($jsonObj);
@@ -343,7 +344,7 @@ class WebService::EveOnline::SSO {
 			grant_type 		=> 'refresh_token',
 			refresh_token 	=> $.tokenData<refresh_token>
 		}
-		$response = self!getBearerToken($form_data);
+		my $response = self!getBearerToken($form_data);
 
 		die "Token not refreshed due to unexpected error."
 			unless $response.is-success;

@@ -58,7 +58,7 @@ sub retrieveMarketData {
 	#my $station = 60004588;  #Rens
 	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 	#my @avoidance = (60003760, 60012412);
-	my @stations = (60005686, 60004588);
+	my @stations = (60005686, 60004588, 60003760);	
 	my @avoidance;
 
 	for %bp<materials>.map( { $_[0] } ) -> $k {
@@ -350,7 +350,8 @@ sub getIDs(Int $typeID) {
 
 	$sth.execute($typeID);
 	for @($sth.allrows) -> $r {
-		my $needed = $r[3] * (1 - (%options<me> // 0));			# with ME reduction
+		# Compute necessary amounts with ME reduction.
+		my $needed = ($r[3] * (1 - (%options<me> // 0))).ceiling;
 		$needed -= %inv{ $r[2] } if %inv{ $r[2] }.defined;
 		%bp<materials>.push: [ $r[2], $needed ] if $r[1] == 1 && $needed > 0;
 	}
@@ -443,7 +444,7 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 	}
 }
 
-multi sub MAIN (Str :$type_name!, Str :$sqlite, Int :$me, *%extras) {
+multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 	openStaticDB($sqlite);
 
 	my $bpname = $type_name;
