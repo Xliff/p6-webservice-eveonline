@@ -67,7 +67,7 @@ class WebService::EveOnline::Base {
 		}
 	}
 
-	sub default_cache_name_extract($s, $u) {
+	sub default_cache_name_extract($u) {
 		my $mu = $u;
 		return unless $mu ~~ / ( <-[ \/? ]>+ ('?' .+)? ) $/;
 		$mu = $/[0].Str;
@@ -253,13 +253,13 @@ class WebService::EveOnline::Base {
 		if (
 			! $force.defined														&&
 			($cache_ttl.defined || $cache_key.defined)	&&
-			($cf = $!cache_name_extract(self, $url)).defined
+			($cf = $!cache_name_extract($url)).defined
 		) {
-			#say "CF: {$cf}";
+			say "CF: {$cf}";
 
 			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
 
-			#say "RF: {$!response_file}";
+			say "RF: {$!response_file}";
 
 			if $!response_file.IO.e {
 				# cw: Timestamp in the future indicates cache file

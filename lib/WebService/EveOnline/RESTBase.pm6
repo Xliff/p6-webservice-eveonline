@@ -16,18 +16,6 @@ class WebService::EveOnline::RESTBase {
 		esi   => 'https://esi.tech.ccp.is/'
 	};
 
-	sub cache_name_extract($s, $u) {
-		my $mu = $u;
-
-		return unless $mu ~~ s/^^ "{ PREFIX{$s.server} }" //;
-		$mu = $mu.subst('/', '_', :g);
-		$mu = $mu.subst('&', '_', :g);
-		$mu = $mu.subst('?', '_', :g);
-		$mu = $mu.chop if $mu.substr(*-1) eq '_';
-
-		return $mu;
-	}
-
 	submethod BUILD(
 		:$sso, :$server,
 	) {
@@ -37,8 +25,19 @@ class WebService::EveOnline::RESTBase {
 	}
 
 	submethod TWEAK {
-		self.setCacheNameFunc(&cache_name_extract);
-	}
+		sub cache_name_func($u) {
+				my $mu = $u;
+
+				return unless $mu ~~ s/^ "{ PREFIX{self.server} }" /;
+				$mu = $mu.subst('/', '_', :g);
+				$mu = $mu.subst('&', '_', :g);
+				$mu = $mu.subst('?', '_', :g);
+				$mu = $mu.chop if $mu.substr(*-1) eq '_';
+				$mu;
+		};
+
+		self.setCacheNameFunc(&cache_name_func);
+	};
 
 	method getServer($server) {
 		given $server.lc {

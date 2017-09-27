@@ -46,9 +46,11 @@ class WebService::EveOnline::ESI::Market {
     self.new($sso, $type);
   }
 
-  method requestByPrefix($prefix, :$datasource)
-    my $url = "{ $.request-prefix }{ $prefix }/";
+  method requestByPrefix($prefix, :$datasource) {
+    my $url = "{ $.request-prefix }{ $prefix }";
     $url ~= "?datasource={$datasource}" if $datasource.defined;
+
+    say "U: $url";
 
     self.makeRequest($url);
   }
@@ -57,31 +59,31 @@ class WebService::EveOnline::ESI::Market {
 
 
   method marketGroups(:$datasource) {
-    self.requestByPrefix('groups/', $datasource);
+    self.requestByPrefix('groups/', :$datasource);
   }
 
   method marketGroup($id, :$datasource) {
-    self.requestByPrefix("groups/$id/", $datasource);
+    self.requestByPrefix("groups/$id/", :$datasource);
   }
 
   method marketPrices(:$datasource) {
-    self.requestByPrefix('prices/', $datasource);
+    self.requestByPrefix('prices/', :$datasource);
   }
 
   method marketStructures($id, :$datasource) {
-    self.requestByPrefix("structures/$id/", $datasource);
+    self.requestByPrefix("structures/$id/", :$datasource);
   }
 
   method marketRegionHistory($id, :$datasource) {
-    self.requestByPrefix("$id/history/", $datasource);
+    self.requestByPrefix("$id/history/", :$datasource);
   }
 
   method marketRegionOrders($id, :$datasource) {
-    self.requestByPrefix("$id/orders/", $datasource);
+    self.requestByPrefix("$id/orders/", :$datasource);
   }
 
   method matketRegionTypes($id, :$datasource) {
-    self.requestByPrefix("$id/types/", $datasource);
+    self.requestByPrefix("$id/types/", :$datasource);
   }
 
 }

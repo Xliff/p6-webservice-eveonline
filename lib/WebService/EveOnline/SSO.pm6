@@ -17,6 +17,7 @@ class WebService::EveOnline::SSO {
 
 	constant PREFIX = "https://login.eveonline.com/";
 
+	has $!realm;
 	has $!postclient;
 	has $!client;
 	has $!xmldoc;
@@ -31,7 +32,7 @@ class WebService::EveOnline::SSO {
 	# later.
 	has $.characterId;
 
-	submethod BUILD(:@scopes) {
+	submethod BUILD(:@scopes, :$realm) {
 		$!client = HTTP::UserAgent.new(
 			:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
 		);
@@ -42,12 +43,13 @@ class WebService::EveOnline::SSO {
 		);
 
 		@!scopes = @scopes;
+		$!realm = $realm;
 
 		self!getPrivateData;
 	}
 
-	method new(:@scopes) {
-		self.bless(:@scopes);
+	method new(:@scopes, :$realm) {
+		self.bless(:@scopes, :$realm);
 	}
 
 	method !encodeAuth {
@@ -75,10 +77,12 @@ class WebService::EveOnline::SSO {
 		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
 		my $form_data = {
 		 	ClientIdentifier 	=> %.privateData<client_id>,
-		 	UserName 			=> %.privateData<username>,
-		 	Password			=> %.privateData<password>,
-		 	RememberMe			=> 'false'
+		 	UserName 			    => %.privateData<username>,
+		 	Password			    => %.privateData<password>,
+		 	RememberMe		    => 'false',
+			realm				      => %.privateData<realm>
 		};
+		$form_data<realm> = $!realm if $!realm.defined;
 
 		my $formUrl = @forms[0]<action>;
 		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
