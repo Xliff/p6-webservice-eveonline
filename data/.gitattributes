@@ -1,1 +1,2 @@
 mysql*.tbz2 filter=lfs diff=lfs merge=lfs -text
+Eve_Static.sqlite3 filter=lfs diff=lfs merge=lfs -text
