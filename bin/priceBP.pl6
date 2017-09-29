@@ -16,6 +16,7 @@ my %market;
 my %options;
 my %existing;
 my $api;
+my $beatprice;
 
 enum Filter <
 	NONE
@@ -534,6 +535,17 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 			}
 		}
 		mq("{ @leftovers ?? 'INCOMPLETE' !! 'TOTAL' } INVOICE: {commaize($total)} ISK");
+		if $beatprice.defined {
+			my $diff = $total - $beatprice;
+			my $per = ($diff / $total) * 100;
+			my $dir = $diff > 0 ?? 'more' !! 'less';
+			(
+				"Price is",
+				commaize($diff.abs),
+				"ISK ({ $per.round.fmt("%d") }%)",
+				"{ $dir } than the specified price."
+			).join(' ').say;
+		}
 	}
 
 	if @leftovers {
@@ -544,7 +556,33 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 	}
 }
 
+use nqp;
+sub USAGE {
+	  # cw: Don't know why the extra spacings are needed. Editor?
+		say nqp::getlexcaller(q|$*USAGE|) ~ q:to/USAGE/;
+
+
+    Extras:
+
+		  --api         Choose which market API to use. Legitimate values are:
+                                  ESI - CCP's ESI
+                                  EC  - EveCentral
+
+		  --beatprice   Set the "price to beat", If specified, the program will
+		                compare the computed manifest price to this price and
+		                will display the difference.
+    USAGE
+}
+
 multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
+	if %extras<beatprice>.defined {
+		die "--beatprice option must be a positive number!"
+			unless 	%extras<beatprice>.Num ~~ Num &&
+							%extras<beatprice> > 0;
+
+		$beatprice = %extras<beatprice>;
+	}
+
 	openStaticDB($sqlite);
 
 	given (%extras<api> // 'ec').lc {
