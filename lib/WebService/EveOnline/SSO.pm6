@@ -176,6 +176,7 @@ class WebService::EveOnline::SSO {
 		};
 
 		my $cid;
+		my $cName;
 		unless $input.chars {
 			my @names = %toons.keys;
 
@@ -197,7 +198,8 @@ class WebService::EveOnline::SSO {
 							$input ~~ /\D/ &&
 							($input.Int < 0 && $input.Int > @names.end);
 					die "Exiting" if !$input.Int;
-					$cid = %toons{@names[$input - 1]};
+					$cName = @names[$input - 1];
+					$cid = %toons{$cName};
 				}
 			}
 		}
@@ -245,7 +247,7 @@ class WebService::EveOnline::SSO {
 			$!postclient.cookies.push-cookie($cookie);
 		}
 
-		say "Using character '{ @names[$input - 1] }' (#{ $!characterId })...";
+		say "Using character '{ $cName }' (#{ $cid })...";
 
 		$response;
 	}

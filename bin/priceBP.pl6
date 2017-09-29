@@ -6,6 +6,7 @@ use DBIish;
 
 use WebService::EveOnline::EveCentral;
 use WebService::EveOnline::ESI::Market;
+use WebService::EveOnline::SSO;
 
 my $sq_dbh;
 my %inv;
@@ -62,7 +63,7 @@ sub quickLook(:$typeID) {
 		return %sec_cache<id> if %sec_cache<id>.defined;
 		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
 			SELECT security
-			FROM staStations
+			FROM Stations
 			WHERE stationID = ?
 		STATEMENT
 
@@ -74,12 +75,12 @@ sub quickLook(:$typeID) {
 		%sec_cache{$id} = @r[0];
 	}
 
-	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 		 SELECT r.regionID, r.regionName, s.stationID, s.stationName
-		 FROM staStations s
-		 INNER JOIN mapRegions r on r.regionID = s.regionID
+		 FROM Stations AS s
+		 INNER JOIN Regions AS r on r.regionID = s.regionID
 		 WHERE
-			 stationID IN ( { @stations.join(',') } )
+			 stationID IN ({ @stations.join(',') })
   STATEMENT
 
 	$sth.execute;
@@ -528,17 +529,17 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 	openStaticDB($sqlite);
 
-	given (%extras<api> // 'esi').lc {
+	given (%extras<api> // 'ec').lc {
 		when 'ec' | 'evecentral' {
-			$api = WebService.EveOnline.EveCentral.new;
+			$api = WebService::EveOnline::EveCentral.new;
 		}
 
 		when 'esi' {
-			my $sso = WebService.EveOnline.SSO.new(
+			my $sso = WebService::EveOnline::SSO.new(
 				:scopes([ "esi-markets.structure_markets.v1" ])
 			);
 			$sso.getToken;
-			$api = WebService.EveOnline.ESI.Market.new($sso, :latest);
+			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);
 		}
 	}
 

@@ -26,6 +26,8 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	my $o_sth = $o_dbh.prepare("PRAGMA journal_mode=memory");
 	$o_sth.execute();
 
+	my ($i_sth, $cnt, @data);
+
 	# Items
 	print "Adding items...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
@@ -44,7 +46,7 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 
 	$o_sth.execute();
 
-	my $i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
 		SELECT typeID, groupID, typeName
 		FROM invTypes
 		ORDER BY typeID
@@ -57,8 +59,8 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		VALUES (?, ?, ?)
 	STATEMENT
 
-	my @data = $i_sth.allrows(:array-of-hash);
-	my $cnt = 0;
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
 	for @data {
     	$o_sth.execute($_<typeID>, $_<groupID>, $_<typeName>);
     	print '.' if $cnt++ % 1000 == 0;
@@ -111,6 +113,54 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
     	print '.' if $cnt++ % 1000 == 0;
 	}
 	$i_sth.finish;
+	say "({$cnt})";
+
+	print "Adding regions...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+	  CREATE TABLE Regions (
+			regionID INTEGER PRIMARY KEY NOT NULL,
+			regionName VARCHAR(100)
+		);
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Region_idx ON Regions(regionID)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Region_Name_idx ON Regions(regionName)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT regionID, regionName
+		FROM mapRegions
+		ORDER BY regionID
+	STATEMENT
+
+	$i_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO Regions (
+			regionID, regionName
+		)
+		VALUES (?, ?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+    $o_sth.execute(
+    	$_<regionID>,
+    	$_<regionName>
+		);
+	  print '.' if $cnt++ % 1000 == 0;
+	}
 	say "({$cnt})";
 
   # Stations
