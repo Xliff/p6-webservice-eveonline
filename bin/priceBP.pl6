@@ -95,23 +95,23 @@ sub quickLook(:$typeID) {
 		%stationName{ $_[2] } = $_[3];
 	}
 	for %regionName.keys -> $r {
-		say "...in { %regionName{ $r } } (#{ $r })";
+		say "\t\t...in { %regionName{ $r } } (#{ $r })";
 		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID));
 
-		for @( $rawdata ) -> $rd {
+		for @( $rawdata<data> ) -> $rd {
 			# cw: Bail unless we are looking. This blows filter data, but we can fix
 			#     that, later.
-			next unless $rd<location> == @stations.any;
+			next unless $rd<location_id> == @stations.any;
 
 			# Add aliases.
-			$rd<station>    := $rd<location>;
+			$rd<station>    := $rd<location_id>;
 			$rd<vol_remain> := $rd<volume_remain>;
 			$rd<id>         := $rd<order_id>;
 
 			# Add region and seclev to order.
-			$rd<seclev>       = getSecLev($rd<location>);
+			$rd<seclev>       = getSecLev($rd<station>);
 			$rd<region>       = $r;
-			$rd<station_name> = %stationName{$rd<location>};
+			$rd<station_name> = %stationName{$rd<station>};
 
 			# Separate into buy and sell orders.
 			if $rd<is_buy_order> {
@@ -122,7 +122,7 @@ sub quickLook(:$typeID) {
 		}
 	}
 
-	$data
+	$data.Hash;
 }
 
 # cw: For re-use, should use @type_ids, and %filter.
@@ -368,7 +368,7 @@ sub getShoppingCart {
 
 		while ($count > 0 && $idx < %market{$k}<sell>.elems ) {
 			unless (%market{$k}<sell>[$idx]<vol_remain> // 1) > $minVol {
-				say "Skipping order #{ %market{$k}<sell>[$idx++]<id> } for small volume...";
+				say "Skipping order #{ %market{$k}<sell>[$idx]<id> } for small volume...";
 				next;
 			}
 
@@ -378,12 +378,13 @@ sub getShoppingCart {
 					??
 					$count !! %market{$k}<sell>[$idx]<vol_remain>,
 				unit_price  => %market{$k}<sell>[$idx]<price>,
-				station     => %market{$k}<sell>[$idx++]<station_name>
+				station     => %market{$k}<sell>[$idx]<station_name>
 			};
 
 			$o<subtotal> = $o<unit_price> * $o<count>;
 			%cart{ %inv{$k} }.push: $o;
 			$count -= $o<count>;
+			$idx++;
 		}
 	}
 
@@ -507,18 +508,35 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 	my @leftovers = %bp<materials>.grep: { $_[1] > 0 };
 
 	if %cart {
+
 		mq("Shopping List for: {$item_name}");
 		for %cart.keys -> $k {
 			say "$k:";
 			for @(%cart{$k}) -> $o {
-				say "\t{$o<station>.substr(0, 40)}\t\t$o<count>\t{commaize($o<unit_price>)}\t{commaize($o<subtotal>)}";
+				# cw: A better way than writing this out as a string.
+				#
+				# NOTE: The need for Nil checks should not be needed here and will
+				#       go away as soon as the problem is squashed.
+				next unless [&&](
+					$o<station>, $o<count>, $o<unit_price>, $o<subtotal>
+				);
+
+				(
+					'',
+					$o<station>.substr(0,40),
+					"\t",
+					$o<count>,
+					commaize($o<unit_price>),
+					commaize($o<subtotal>)
+				).join("\t").say;
+
 				$total += $o<subtotal>;
 			}
 		}
 		mq("{ @leftovers ?? 'INCOMPLETE' !! 'TOTAL' } INVOICE: {commaize($total)} ISK");
 	}
 
-	if (@leftovers) {
+	if @leftovers {
 		say "\n\nWARNING! -- Quantity requirements not met for the following items: ";
 		for @leftovers -> $i {
 			say "\t{ %inv{ $i[0] } }: { $i[1] }":
@@ -536,7 +554,8 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 
 		when 'esi' {
 			my $sso = WebService::EveOnline::SSO.new(
-				:scopes([ "esi-markets.structure_markets.v1" ])
+				:scopes([ "esi-markets.structure_markets.v1" ]),
+				:realm('ESI')
 			);
 			$sso.getToken;
 			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);

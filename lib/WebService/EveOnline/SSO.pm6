@@ -82,7 +82,7 @@ class WebService::EveOnline::SSO {
 		 	RememberMe		    => 'false',
 			realm				      => %.privateData<realm>
 		};
-		$form_data<realm> = $!realm if $!realm.defined;
+		$form_data<realm> = $!realm if $!realm.defined && $!realm.chars;
 
 		my $formUrl = @forms[0]<action>;
 		die "\nNo ACTION destionation provided in <FORM> tag."
@@ -138,7 +138,7 @@ class WebService::EveOnline::SSO {
 		# cw: -YYY-
 		#     At this point, if URL has "/Account/LogOn" in it, then we've
 		#     failed the authorization phase and should throw an exception.
-		say "U: $url";
+		#say "U: $url";
 
 		{
 			$response = $!client.get($url);
@@ -168,15 +168,15 @@ class WebService::EveOnline::SSO {
 		die "No characters exist on this account!\n" unless @options.elems;
 
 		my $input = '';
+		my ($cid, $cName);
 		my %toons = do for @options {
 			if (%!privateData<CHARACTER> // '') eq $_[0].text {
-				$input = $_<value>;
+				$cid = $input = $_<value>;
+				$cName = $_[0].text;
 			}
 			$_[0].text => $_<value>
 		};
 
-		my $cid;
-		my $cName;
 		unless $input.chars {
 			my @names = %toons.keys;
 

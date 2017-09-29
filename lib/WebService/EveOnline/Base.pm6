@@ -145,7 +145,7 @@ class WebService::EveOnline::Base {
 		my $retObj;
 		given $response {
 			when Str {
-				$retObj = $json.defined ??
+				$retObj<data> = $json.defined ??
 					from-json($response) !!
 					$p5.call('xml2hash', $response);
 
@@ -154,7 +154,7 @@ class WebService::EveOnline::Base {
 
 			when HTTP::Response {
 				if $response.has-content {
-					$retObj = $json.defined ??
+					$retObj<data> = $json.defined ??
 						from-json($response.content) !!
 						$p5.call('xml2hash', $response.content);
 
@@ -209,12 +209,6 @@ class WebService::EveOnline::Base {
 
 			#say "TTD: [{$ttd}]";
 
-			# Force the return data into a hash, if necessary.
-			# Check for both Inline::Perl5 and Perl6 variants.
-			if $retObj !~~ Hash && $retObj !~~ Inline::Perl5::Perl5Hash {
-				$retObj = { data => $retObj };
-			}
-
 			# cw: ...the data cached is the retrieved response.
 			#say "RT: { $response.^name }";
 			#say "IS: { $response.is-success }";
@@ -255,11 +249,11 @@ class WebService::EveOnline::Base {
 			($cache_ttl.defined || $cache_key.defined)	&&
 			($cf = $!cache_name_extract($url)).defined
 		) {
-			say "CF: {$cf}";
+			#say "CF: {$cf}";
 
 			$!response_file = ($!cache_prefix, $cf).join($*SPEC.dir-sep);
 
-			say "RF: {$!response_file}";
+			#say "RF: {$!response_file}";
 
 			if $!response_file.IO.e {
 				# cw: Timestamp in the future indicates cache file

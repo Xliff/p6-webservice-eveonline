@@ -60,7 +60,7 @@ class WebService::EveOnline::ESI::Market {
 			$nf = 1 unless $nf;
 		}
 
-    say "U: $url";
+    #say "U: $url";
 
     self.makeRequest($url);
   }
