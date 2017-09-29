@@ -5,6 +5,7 @@ use v6.c;
 use DBIish;
 
 use WebService::EveOnline::EveCentral;
+use WebService::EveOnline::ESI::Market;
 
 my $sq_dbh;
 my %inv;
@@ -13,6 +14,7 @@ my %mats;
 my %market;
 my %options;
 my %existing;
+my $api;
 
 enum Filter <
 	NONE
@@ -36,34 +38,102 @@ my @hubs = <<
 	60012412
 >>;
 
+#my $station = 60005686;  # Hek
+#my $station = 60003760;  # Jita
+#my $station = 60004588;  # Rens
+# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
+#my @avoidance = (60003760, 60012412);
+
+my @stations = (60005686, 60004588, 60003760);
+my @avoidance;
+
 # Print error without backtrace.
 sub fatal($msg) {
 	note($msg);
 	exit;
 }
 
+sub quickLook(:$typeID) {
+	return $api.quicklook(:$typeID) if $api ~~ WebService::EveOnline::EveCentral;
+
+	sub getSecLev($id) {
+		state %sec_cache;
+
+		return %sec_cache<id> if %sec_cache<id>.defined;
+		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+			SELECT security
+			FROM staStations
+			WHERE stationID = ?
+		STATEMENT
+
+		$sth.execute($id);
+
+		my @r = $sth.allrows;
+
+		return unless @r.elems;
+		%sec_cache{$id} = @r[0];
+	}
+
+	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+		 SELECT regionID, stationID, stationName
+		 FROM staStations
+		 WHERE
+			 stationID IN ( { @stations.join(',') } )
+  STATEMENT
+
+	$sth.execute;
+
+	my @rows = $sth.allrows;
+	my %stationName;
+	my $data;
+
+	%stationName{ $_[1] } = $_[2] for @rows;
+	for @rows.map({ $_[0] }) -> $r {
+		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID));
+
+		for @( $rawdata ) -> $rd {
+			# cw: Bail unless we are looking. This blows filter data, but we can fix
+			#     that, later.
+			next unless $rd<location> == @stations.any;
+
+			# Add aliases.
+			$rd<station>    := $rd<location>;
+			$rd<vol_remain> := $rd<volume_remain>;
+			$rd<id>         := $rd<order_id>;
+
+			# Add region and seclev to order.
+			$rd<seclev>       = getSecLev($rd<location>);
+			$rd<region>       = $r;
+			$rd<station_name> = %stationName{$rd<location>};
+
+			# Separate into buy and sell orders.
+			if $rd<is_buy_order> {
+				$data<quicklook><buy_orders><order>.push: $rd;
+			} else {
+				$data<quicklook><sell_orders><order>.push: $rd;
+			}
+		}
+	}
+
+	$data
+}
+
 # cw: For re-use, should use @type_ids, and %filter.
 #     also, remove static @avoidance, as that will eventually be a part
 #     of %filter.
 sub retrieveMarketData {
-	my $ec = WebService::EveOnline::EveCentral.new;
-
 	#my Filter $filter = HUB;
 	my Filter $filter = STATION;
 	my ($min_seclev, $max_seclev);
 	my $seclev = 0.5;
 	my $region;
-	#my $station = 60005686;    # Hek
-	#my $station = 60003760; #Jita
-	#my $station = 60004588;  #Rens
-	# cw: Personal prefernce keeps me out of Jita and WTF is Agil?
-	#my @avoidance = (60003760, 60012412);
-	my @stations = (60005686, 60004588, 60003760);	
-	my @avoidance;
 
 	for %bp<materials>.map( { $_[0] } ) -> $k {
 		say "\t{ %inv{$k} }...";
-		my %m = $ec.quickLook(:typeID($k));
+
+		# cw: Since Eve-Central is down at this time of writing, we are adding support
+		#     for ESI. Too make things easier, we need to abstract away the difference.
+		my %m = quickLook(:typeID($k));
 
 		# Filter, here -- seclev is easy...
 		#	for markethubs, will need to get the station IDs:
@@ -75,145 +145,150 @@ sub retrieveMarketData {
 		# Tash-Murkon - 60001096
 		#  Oursulaert - 60011740
 		#        Agil - 60012412
-		given $filter {
-			when HUB {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<station> == any(@hubs)
-								&&
-								$_<station> !== any(@avoidance)
-						}
 
-				%m<quicklook><buy_orders><order> =
-					%m<quicklook><buy_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<station> == any(@hubs)
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+		# cW: This handling could be done better. Probably in the abstracted
+		#     quicklook.
+		if $api ~~ WebService::EveOnline::EveCentral {
+			given $filter {
+				when HUB {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<station> == any(@hubs)
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			# cw: Consider how these could implement multiple values
-			when REGION {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<region> == $region
-								&&
-								$_<station> !== any(@avoidance)
-						}
+					%m<quicklook><buy_orders><order> =
+						%m<quicklook><buy_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<station> == any(@hubs)
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
 
-				%m<quicklook><buy_orders><order> =
-					%m<quicklook><buy_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<region> == $region
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+				# cw: Consider how these could implement multiple values
+				when REGION {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<region> == $region
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			when STATION {
-				# cw: When done this way, HUB is just STATION with a predefined list.
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{ $_.defined && $_<station> == any(@stations); }
+					%m<quicklook><buy_orders><order> =
+						%m<quicklook><buy_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<region> == $region
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
 
-				%m<quicklook><buy_orders><order> =
-					%m<quicklook><buy_orders><order>.grep:
-						{ $_.defined && $_<station> == any(@stations); }
-			}
+				when STATION {
+					# cw: When done this way, HUB is just STATION with a predefined list.
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{ $_.defined && $_<station> == any(@stations); }
 
-			when SECLEV_GT {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> >= $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
+					%m<quicklook><buy_orders><order> =
+						%m<quicklook><buy_orders><order>.grep:
+							{ $_.defined && $_<station> == any(@stations); }
+				}
 
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> >= $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+				when SECLEV_GT {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> >= $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			when SECLEV_BT {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> <= $min_seclev
-								&&
-								$_<security> >= $max_seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> >= $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
 
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> <= $min_seclev
-								&&
-								$_<security> >= $max_seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+				when SECLEV_BT {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> <= $min_seclev
+									&&
+									$_<security> >= $max_seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			when SECLEV_LT {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> <= $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> <= $min_seclev
+									&&
+									$_<security> >= $max_seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
 
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> <= $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+				when SECLEV_LT {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> <= $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			when SECLEV_EQ {
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> == $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> <= $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
 
-				%m<quicklook><sell_orders><order> =
-					%m<quicklook><sell_orders><order>.grep:
-						{
-							$_.defined &&
-								$_<security> == $seclev
-								&&
-								$_<station> !== any(@avoidance)
-						}
-			}
+				when SECLEV_EQ {
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> == $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
 
-			default {
-				# No Op
+					%m<quicklook><sell_orders><order> =
+						%m<quicklook><sell_orders><order>.grep:
+							{
+								$_.defined &&
+									$_<security> == $seclev
+									&&
+									$_<station> !== any(@avoidance)
+							}
+				}
+
+				default {
+					# No Op
+				}
 			}
 		}
 
@@ -446,6 +521,20 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 
 multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 	openStaticDB($sqlite);
+
+	given (%extras<api> // 'esi').lc {
+		when 'ec' | 'evecentral' {
+			$api = WebService.EveOnline.EveCentral.new;
+		}
+
+		when 'esi' {
+			my $sso = WebService.EveOnline.SSO.new(
+				:scopes([ "esi-markets.structure_markets.v1" ])
+			);
+			$sso.getToken;
+			$api = WebService.EveOnline.ESI.Market.new($sso, :latest);
+		}
+	}
 
 	my $bpname = $type_name;
 	$bpname ~= " Blueprint" unless $bpname ~~ m:i/Blueprint$/;
