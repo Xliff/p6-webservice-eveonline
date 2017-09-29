@@ -75,8 +75,9 @@ sub quickLook(:$typeID) {
 	}
 
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-		 SELECT regionID, stationID, stationName
-		 FROM staStations
+		 SELECT r.regionID, r.regionName, s.stationID, s.stationName
+		 FROM staStations s
+		 INNER JOIN mapRegions r on r.regionID = s.regionID
 		 WHERE
 			 stationID IN ( { @stations.join(',') } )
   STATEMENT
@@ -85,10 +86,15 @@ sub quickLook(:$typeID) {
 
 	my @rows = $sth.allrows;
 	my %stationName;
+	my %regionName;
 	my $data;
 
-	%stationName{ $_[1] } = $_[2] for @rows;
-	for @rows.map({ $_[0] }) -> $r {
+	for @rows {
+		 %regionName{ $_[0] } = $_[1];
+		%stationName{ $_[2] } = $_[3];
+	}
+	for %regionName.keys -> $r {
+		say "...in { %regionName{ $r } } (#{ $r })";
 		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID));
 
 		for @( $rawdata ) -> $rd {

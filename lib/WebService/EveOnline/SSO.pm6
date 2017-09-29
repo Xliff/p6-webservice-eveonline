@@ -174,6 +174,8 @@ class WebService::EveOnline::SSO {
 			}
 			$_[0].text => $_<value>
 		};
+
+		my $cid;
 		unless $input.chars {
 			my @names = %toons.keys;
 
@@ -195,7 +197,7 @@ class WebService::EveOnline::SSO {
 							$input ~~ /\D/ &&
 							($input.Int < 0 && $input.Int > @names.end);
 					die "Exiting" if !$input.Int;
-					$input = %toons{@names[$input - 1]};
+					$cid = %toons{@names[$input - 1]};
 				}
 			}
 		}
@@ -208,7 +210,7 @@ class WebService::EveOnline::SSO {
 		}
 
 		my $form_data;
-		$!characterId = $form_data<CharacterId> = $input;
+		$!characterId = $form_data<CharacterId> = $cid;
 		$form_data<action> = 'Authorize';
 		for @( $!xmldoc.elements(
 			:TAG<input>, :type<hidden>, :RECURSE(100)
@@ -217,7 +219,6 @@ class WebService::EveOnline::SSO {
 		}
 
 		my $response;
-		say "Posting to $formUrl";
 		{
 			$response = $!postclient.post($formUrl, $form_data);
 
@@ -228,7 +229,7 @@ class WebService::EveOnline::SSO {
 
 		# cw: This will be a redirect, but it needs to be a GET, not
 		#     a POST.
-
+		#
 		#     The problem here is that the cookes are MANGLED in the
 		#     header.
 		my $respHash = $response.header.hash;
@@ -243,6 +244,8 @@ class WebService::EveOnline::SSO {
 			$!client.cookies.push-cookie($cookie);
 			$!postclient.cookies.push-cookie($cookie);
 		}
+
+		say "Using character '{ @names[$input - 1] }' (#{ $!characterId })...";
 
 		$response;
 	}
