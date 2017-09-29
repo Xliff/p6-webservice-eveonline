@@ -179,7 +179,7 @@ class WebService::EveOnline::Base {
 			} elsif $cache_key.defined {
 				# cw: -YYY- Error checking?!?
 				$ttd =  $cache_key ~~ /^^ 'header:' (.+)/ ??
-				  # cw: This is problematic.
+				  # cw: This is problematic. Array may not always split on the DOW.
 					do {
 						given $response.header.field(~$0).values {
 							when Str   { $_ }

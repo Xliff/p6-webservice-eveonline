@@ -25,31 +25,29 @@ class WebService::EveOnline::RESTBase {
 	}
 
 	submethod TWEAK {
-		sub cache_name_func($u) {
+		self.setCacheNameFunc( -> $u {
 				my $mu = $u;
 
-				return unless $mu ~~ s/^ "{ PREFIX{self.server} }" /;
+				$mu ~~ s/^ PREFIX{self.server} //;
 				$mu = $mu.subst('/', '_', :g);
 				$mu = $mu.subst('&', '_', :g);
 				$mu = $mu.subst('?', '_', :g);
 				$mu = $mu.chop if $mu.substr(*-1) eq '_';
 				$mu;
-		};
-
-		self.setCacheNameFunc(&cache_name_func);
-	};
+		});
+	}
 
 	method getServer($server) {
 		given $server.lc {
-			when 'tq' || 'tranquility' || 'tranq' || 't' {
+			when 'tq' | 'tranquility' | 'tranq' | 't' {
 				'tq';
 			}
 
-			when 'sisi' || 'singularity' || 'sing' || 's' {
+			when 'sisi' | 'singularity' | 'sing' | 's' {
 				'sisi'
 			}
 
-			when 'esi' || 'e' {
+			when 'esi' | 'e' {
 				'esi'
 			}
 

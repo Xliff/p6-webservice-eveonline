@@ -15,7 +15,7 @@ class WebService::EveOnline::SSO {
 	#     characters in regexes. This is solely due to not screw up the
 	#     syntactical highlighting in the editor I use for development.
 
-	constant PREFIX = "https://login.eveonline.com/";
+	constant PREFIX = "https://login.eveonline.com";
 
 	has $!realm;
 	has $!postclient;
@@ -85,6 +85,9 @@ class WebService::EveOnline::SSO {
 		$form_data<realm> = $!realm if $!realm.defined;
 
 		my $formUrl = @forms[0]<action>;
+		die "\nNo ACTION destionation provided in <FORM> tag."
+			unless $formUrl.defined;
+
 		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
 			$formUrl = "{ PREFIX }{ $formUrl }";
@@ -92,56 +95,64 @@ class WebService::EveOnline::SSO {
 
 		my $url;
 		my $response;
-		try {
-			# cw: This doesn't seem to follow the same pattern as the last
-			#     request. There may not be an exception, here.
-			CATCH {
-				when X::HTTP::Response { .resume }
-			}
 
+		{
 			$response = $!postclient.post($formUrl, $form_data);
-			# cw: We've rolled our own until a fix can be made for HTTP::UserAgent
-			#     Probably has to do with early expiration or parsing in
-			#     HTTP::Cookies.
-			my @cookies = getCookies($response);
 
-			# cw: This will be a redirect, but it needs to be a GET, not
-			#     a POST.
-			for @cookies -> $c {
-				# cw: Wrap in a DEBUG.
-				#say "Cookie { $c.name } expires '{ $c.expires }'";
-
-				$!client.cookies.push-cookie($c);
-				$!postclient.cookies.push-cookie($c);
+			# If we get a redirect from the POST, preserve the response.
+			CATCH {
+				when X::HTTP::Response { $response = .response; }
 			}
-
-			# cw: Not optimal, but this should generally work for the servers
-			#     we connect to.
-			$url = $response.header.field('Location');
-			unless $url ~~ /^^ https\:\/\/ / {
-				# cw: MUST be HTTPS at this point.
-				$url = "{ PREFIX }{ $url }"
-			}
-
-			# cw: -YYY-
-			#     At this point, if URL has "/Account/LogOn" in it, then we've
-			#     failed the authorization phase and should throw an exception.
-			say "U: $url";
 		}
 
-		try {
+		my @cookies = getCookies($response);
+		for @cookies -> $c {
+			$!client.cookies.push-cookie($c);
+			$!postclient.cookies.push-cookie($c);
+		}
+
+		# cw: Not optimal, but this should generally work for the servers
+		#     we connect to.
+		$url = ~$response.header.field('Location').values;
+
+		# cw: Attempt to pull info from $response.content
+		if !$url.defined && $response.has-content {
+			$!xmldoc = HTML::Parser::XML.new.parse($response.content);
+			if $!xmldoc ~~ XML::Document {
+				my @links = $!xmldoc.elements(:TAG<a>, :RECURSE(100));
+				# cw: TODO - Incomplete code, but covering all bases. If no Location
+				#            provided in header, then attempt to see if a probable
+				#            link exists in the content.
+				die "\nLink extraction from content, NYI.\n";
+			}
+		}
+
+		die "\nRedirect provided no valid destination\n" unless $url.defined;
+
+		unless $url ~~ /^^ https\:\/\/ / {
+			# cw: MUST be HTTPS at this point.
+		  $url = '/' ~ $url unless $url.substr(0, 1) eq '/';
+			$url = "{ PREFIX }{ $url }"
+		}
+
+		# cw: -YYY-
+		#     At this point, if URL has "/Account/LogOn" in it, then we've
+		#     failed the authorization phase and should throw an exception.
+		say "U: $url";
+
+		{
+			$response = $!client.get($url);
+
 			CATCH {
 				when X::HTTP::NoResponse {
 					$response = .response;
 				}
 			}
-
-			$response = $!client.get($url);
-
-			die "HTTP request to '$url' failed!" unless $response.is-success;
 		}
 
-		my @cookies = getCookies($response);
+		die "HTTP request to '$url' failed!" unless $response.is-success;
+
+		@cookies = getCookies($response);
 		for @cookies -> $c {
 			$!client.cookies.push-cookie($c);
 			$!postclient.cookies.push-cookie($c);
@@ -207,31 +218,30 @@ class WebService::EveOnline::SSO {
 
 		my $response;
 		say "Posting to $formUrl";
-		try {
-			CATCH {
-				when X::HTTP::Response { .resume }
-			}
-
+		{
 			$response = $!postclient.post($formUrl, $form_data);
 
-			# cw: This will be a redirect, but it needs to be a GET, not
-			#     a POST.
-
-			#     The problem here is that the cookes are MANGLED in the
-			#     header.
-
-			my $respHash = $response.header.hash;
-
-			# cw: Throw behind DEBUG parameter.
-			#for $respHash.keys -> $k {
-			#	say "Header: $k => $respHash{$k}";
-			#}
-
-			my @cookies = getCookies($response);
-			for @cookies -> $cookie {
-				$!client.cookies.push-cookie($cookie);
-				$!postclient.cookies.push-cookie($cookie);
+			CATCH {
+				when X::HTTP::Response { $response = .response }
 			}
+		}
+
+		# cw: This will be a redirect, but it needs to be a GET, not
+		#     a POST.
+
+		#     The problem here is that the cookes are MANGLED in the
+		#     header.
+		my $respHash = $response.header.hash;
+
+		# cw: Throw behind DEBUG parameter.
+		#for $respHash.keys -> $k {
+		#	say "Header: $k => $respHash{$k}";
+		#}
+
+		my @cookies = getCookies($response);
+		for @cookies -> $cookie {
+			$!client.cookies.push-cookie($cookie);
+			$!postclient.cookies.push-cookie($cookie);
 		}
 
 		$response;
@@ -270,13 +280,13 @@ class WebService::EveOnline::SSO {
 
 		my $redir = %!privateData<redirect_uri> // "http://localhost:8888/";
 		my $p = prepParams([
-			[ 'response_type', 	'code' 					  ],
-			[ 'redirect_uri', 	$redir 					  ],
-			[ 'client_id', 		%!privateData<client_id>  ],
-			[ 'scope', 			@.scopes.join(',')  	  ],
-			[ 'state',  		($state = self!getState)  ]
+			[ 'response_type', 	'code' 					          ],
+			[ 'redirect_uri', 	$redir 					          ],
+			[ 'client_id', 		  %!privateData<client_id>  ],
+			[ 'scope', 			    @.scopes.join(',')  	    ],
+			[ 'state',  		    ($state = self!getState)  ]
 		]);
-		my $url = "{ PREFIX }oauth/authorize?{ $p }";
+		my $url = "{ PREFIX }/oauth/authorize?{ $p }";
 		my $response;
 
 		$response = $!client.get($url);
