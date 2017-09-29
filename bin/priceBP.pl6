@@ -46,7 +46,8 @@ my @hubs = <<
 # cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 #my @avoidance = (60003760, 60012412);
 
-my @stations = (60005686, 60004588, 60003760);
+my @stations = (60005686, 60004588, 60003760);		# Jita.
+#my @stations = (60005686, 60004588);							# NO JITA!
 my @avoidance;
 
 # Print error without backtrace.
@@ -369,7 +370,7 @@ sub getShoppingCart {
 
 		while ($count > 0 && $idx < %market{$k}<sell>.elems ) {
 			unless (%market{$k}<sell>[$idx]<vol_remain> // 1) > $minVol {
-				say "Skipping order #{ %market{$k}<sell>[$idx]<id> } for small volume...";
+				say "Skipping order #{ %market{$k}<sell>[$idx++]<id> } for small volume...";
 				next;
 			}
 
