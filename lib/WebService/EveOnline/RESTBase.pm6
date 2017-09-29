@@ -13,7 +13,7 @@ class WebService::EveOnline::RESTBase {
 	constant PREFIX = {
 		tq		=> 'https://crest-tq.eveonline.com',
 		sisi	=> 'https://crest-sisi.eveonline.com',
-		esi   => 'https://esi.tech.ccp.is/'
+		esi   => 'https://esi.tech.ccp.is'
 	};
 
 	submethod BUILD(
@@ -26,9 +26,10 @@ class WebService::EveOnline::RESTBase {
 
 	submethod TWEAK {
 		self.setCacheNameFunc( -> $u {
+				my $p = PREFIX{self.server};
 				my $mu = $u;
 
-				$mu ~~ s/^ PREFIX{self.server} //;
+				$mu ~~ s/^ "{ $p }/" //;
 				$mu = $mu.subst('/', '_', :g);
 				$mu = $mu.subst('&', '_', :g);
 				$mu = $mu.subst('?', '_', :g);

@@ -15,10 +15,10 @@ class WebService::EveOnline::ESI::Market {
   }
 
   submethod TWEAK {
-    self.appendPrefix("{ $!type }/markets/");
+    self.appendPrefix("/{ $!type }/markets/");
   }
 
-  multi method new($sso, $type) {
+  multi method new($sso, $type, :$useragent) {
     die "Invalid server parameter. Must be one of 'legacy', 'latest', or 'dev'"
       unless $type eq <latest legacy dev>.any;
 
@@ -28,11 +28,12 @@ class WebService::EveOnline::ESI::Market {
       :$type,
       :cache_ttl(300),
       :cache_prefix_add("ESI"),
-      :cache_key('header:expires')
+      :cache_key('header:expires'),
+			:$useragent
     );
   }
 
-  multi method new($sso, :$latest, :$legacy, :$dev) {
+  multi method new($sso, :$latest, :$legacy, :$dev, :$useragent) {
     die "Must specify server type as one of :legacy, :latest or :dev"
       unless [^^]($latest, $legacy, $dev);
 
@@ -43,12 +44,21 @@ class WebService::EveOnline::ESI::Market {
       default      { "latest"; }
     };
 
-    self.new($sso, $type);
+    self.new($sso, $type, :$useragent);
   }
 
-  method requestByPrefix($prefix, :$datasource) {
+  method requestByPrefix($prefix, :$datasource, *%args) {
     my $url = "{ $.request-prefix }{ $prefix }";
-    $url ~= "?datasource={$datasource}" if $datasource.defined;
+		my $nf = 0;
+
+		if $datasource.defined {
+    	$url ~= "?datasource={$datasource}";
+			$nf = 1;
+		}
+		for %args.keys -> $k {
+			$url ~= "{ $nf ?? '&' !! '?' }{ $k }={ %args{$k} }" if $%args{$k};
+			$nf = 1 unless $nf;
+		}
 
     say "U: $url";
 
@@ -62,8 +72,8 @@ class WebService::EveOnline::ESI::Market {
     self.requestByPrefix('groups/', :$datasource);
   }
 
-  method marketGroup($id, :$datasource) {
-    self.requestByPrefix("groups/$id/", :$datasource);
+  method marketGroup($id, :$datasource, :$language) {
+    self.requestByPrefix("groups/$id/", :$datasource, :$language);
   }
 
   method marketPrices(:$datasource) {
@@ -74,12 +84,12 @@ class WebService::EveOnline::ESI::Market {
     self.requestByPrefix("structures/$id/", :$datasource);
   }
 
-  method marketRegionHistory($id, :$datasource) {
-    self.requestByPrefix("$id/history/", :$datasource);
+  method marketRegionHistory($id, :$datasource, Int :$type_id) {
+    self.requestByPrefix("$id/history/", :$datasource, :$type_id);
   }
 
-  method marketRegionOrders($id, :$datasource) {
-    self.requestByPrefix("$id/orders/", :$datasource);
+  method marketRegionOrders($id, :$datasource, Int :$type_id) {
+    self.requestByPrefix("$id/orders/", :$datasource, :$type_id);
   }
 
   method matketRegionTypes($id, :$datasource) {
