@@ -1,5 +1,7 @@
 use v6.c;
 
+use HTTP::UserAgent;
+use JSON::Fast;
 use WebService::EveOnline::Base;
 use WebService::EveOnline::Utils;
 

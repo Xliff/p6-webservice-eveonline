@@ -1,7 +1,5 @@
 use v6.c;
 
-use HTTP::UserAgent;
-use JSON::Fast;
 use WebService::EveOnline::RESTBase;
 use WebService::EveOnline::Utils;
 
@@ -63,49 +61,5 @@ class WebService::EveOnline::ESI::Base {
 
     self.makeRequest($url);
   }
-
-	method post($url, :$datasource, *%extras) {
-		my $postclient = HTTP::UserAgent.new;
-			:max_redirects(0),
-			:useragent(self.useragent)
-		);
-
-		my (@form_data, $content-type);
-		given %extras{ENCODING}.lc {
-			when 'json' {
-				$content-type = 'application/json';
-				for %extras.keys -> $k {
-					next if $k eq $k.uc;
-					@form_data.push: to_json(%extra{$k});
-				}
-			}
-
-			when 'xml' {
-				$content-type = 'application/xml';
-				for %extras.keys -> $k {
-					next if $k eq $k.uc;
-					# cw ---TODO--- @form_data: to_xml(%extra{$k});
-				}
-			}
-		}
-
-		my $response;
-		$!sso.refreshToken;
-		my %header = $!sso.getHeader;
-		%header<Content-Type> = $content-type;
-		{
-			$response = $postclient.post(
-				$url,
-				:form_data($form_data.join('&'))
-				|%header
-			);
-
-			CATCH X::HTTP::Response {
-				$response = .response;
-			}
-		}
-
-		$response;
-	}
 
 }
