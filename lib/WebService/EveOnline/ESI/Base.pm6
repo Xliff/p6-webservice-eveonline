@@ -49,6 +49,9 @@ class WebService::EveOnline::ESI::Base {
 
 		$url ~= '/' unless $url.substr([*-1]) eq '/';
 		if $datasource.defined {
+			# cw: It would be better if this were not a set of literals, but we
+			#     can come back and revisit, later.
+			die "Invalid datasource!"unless $datasource eq <latest legacy dev>.any;
     	$url ~= "?datasource={$datasource}";
 			$nf = 1;
 		}
