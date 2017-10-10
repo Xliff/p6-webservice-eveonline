@@ -50,10 +50,29 @@ for $doc.find('span.path a').each -> $a {
       $t = $t ?? $t.text !! '';
 
       if $dt {
-        my $de;
+        my ($de, @prop-e, @props, @pd);
+        my $propCount = 0;
         $dt = $dt.find('span.model-signature').last;
         $de = $dt.find('div.signature-container').last;
-        $dt = $de ?? 'complex' !! $dt.text;
+        if $de {
+          @prop-e = @( $de.find('span.propName, span.propType').to_array );
+
+          for @prop-e -> $p {
+            given $p.attr('class') {
+              when /propName/ {
+                @props[$propCount][0] = $p.text;
+                @props[$propCount][2] = 1 if $p.attr('required');
+              }
+              when 'propType' {
+                # Let's hope this is properly ordered.
+                @props[$propCount++][1] = $p.text ;
+              }
+            }
+          }
+
+        }
+
+        $dt = @props ?? @props !! $dt.text;
       }
 
       unless $n.lc.trim eq <token x-user-agent user_agent page>.any {
