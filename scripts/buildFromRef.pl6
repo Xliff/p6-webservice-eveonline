@@ -13,7 +13,7 @@ die "Could not open file 'ESI.html'"
 
 my $doc = Mojo::DOM.new($ref_html);
 
-for $doc.find('span[class="path"] a').each -> $a {
+for $doc.find('span.path a').each -> $a {
   my $p = $a.parent.parent.parent.parent;
 
   $a.text ~~ / '/' (\w+?) '/' /;
@@ -48,9 +48,12 @@ for $doc.find('span[class="path"] a').each -> $a {
     if $n {
       $n = $n.text;
       $t = $t ?? $t.text !! '';
+
       if $dt {
-        $dt = $dt.find('span').last;
-        $dt = (@( $dt.children.to_array ).elems > 1) ?? 'complex' !! $dt.text;
+        my $de;
+        $dt = $dt.find('span.model-signature').last;
+        $de = $dt.find('div.signature-container').last;
+        $dt = $de ?? 'complex' !! $dt.text;
       }
 
       unless $n.lc.trim eq <token x-user-agent user_agent page>.any {
