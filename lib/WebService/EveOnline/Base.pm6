@@ -1,6 +1,6 @@
 use v6.c;
 
-our enum RequestMethod is export <POST GET>;
+our enum RequestMethod is export <POST GET PUT DELETE HEAD>;
 
 class WebService::EveOnline::Base {
 	use DateTime::Parse;
@@ -228,6 +228,7 @@ class WebService::EveOnline::Base {
 		$url,
 		:$method = GET,
 		:$header,
+		:$form,
 		:$cache_ttl = $!cache_ttl,
 		:$cache_key = $!cache_key,
 		:$force,
@@ -235,12 +236,10 @@ class WebService::EveOnline::Base {
 	) {
 		my $response;
 
-		my $useMethod = $method // GET;
+		die "Invalid value '$method' used for method."
+			unless $method ~~ RequestMethod;
 
-		die "Invalid value passed as \$method"
-			unless $useMethod ~~ RequestMethod;
-
-		die "Invalid extra header values passed"
+		die "Header value should be a Hash, not { $header.WHAT }."
 			unless !$header.defined || $header ~~ Hash;
 
 		my $cf;
@@ -269,10 +268,23 @@ class WebService::EveOnline::Base {
 		}
 
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
-		$response = $useMethod == GET ??
-			$!http_client.get($url,  :header(%( $header )))
-			!!
-			$!http_client.post($url, :header(%( $header )));
+		$response = do given $method {
+			when GET {
+				$!http_client.get($url,  :header(%( $header )));
+			}
+
+			when POST {
+				$!http_client.post($url, :form(%( $form )), :header(%( $header )));
+			}
+
+			when DELETE {
+				$!http_client.delete($url, :header(%( $header )));
+			}
+
+			when PUT {
+				$!http_client.put($url, :form(%( $form ), :header(%( $header ))));
+			}
+		};
 
 		self.handleResponse(
 			$response,
@@ -282,6 +294,7 @@ class WebService::EveOnline::Base {
 		);
 	}
 
+	# cw: Shortcut for FORM method. May not need anymore.
 	method postForm($form, :$json) {
 		my $response = $form.run;
 

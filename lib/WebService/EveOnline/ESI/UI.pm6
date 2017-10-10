@@ -2,6 +2,10 @@ use v6.c;
 
 use WebService::EveOnline::ESI::Base;
 
+# XXX XXX XXX--- TODO ---
+#  cw: ALL methods in this module must be adjusted to use the POST method.
+# XXX XXX XXX
+
 class WebService::EveOnline::ESI::UI {
 	also is WebService::EveOnline::ESI::Base;
 
