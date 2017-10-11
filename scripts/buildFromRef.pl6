@@ -6,14 +6,14 @@ use Mojo::DOM:from<Perl5>;
 use Data::Dump;
 
 my %Endpoints;
-
 my $ref_html;
+
 die "Could not open file 'ESI.html'"
   unless  "ESI.html".IO.e && $ref_html = "ESI.html".IO.open.slurp-rest;
 
 my $doc = Mojo::DOM.new($ref_html);
 
-for $doc.find('span.path a').each -> $a {
+for @( $doc.find('span.path a').to_array ) -> $a {
   my $p = $a.parent.parent.parent.parent;
 
   $a.text ~~ / '/' (\w+?) '/' /;
@@ -34,11 +34,9 @@ for $doc.find('span.path a').each -> $a {
   # Endpoint Parameters
   my %params;
 
-  my $pr = $p.find('tbody.operation-params tr');
-
   # Retrieving proper data types from Inline::Perl5 is problematic, particularly
   # when dealing with MOJO::Collections.
-  for @( $pr.to_array ) -> $r {
+  for @( $p.find('tbody.operation-params tr').to_array ) -> $r {
     my @c = @( $r.children.to_array );
     my $n = @c[0].find('label').last;
     my $t = @c[3];
@@ -61,7 +59,7 @@ for $doc.find('span.path a').each -> $a {
             given $p.attr('class') {
               when /propName/ {
                 @props[$propCount][0] = $p.text;
-                @props[$propCount][2] = 1 if $p.attr('required');
+                @props[$propCount][2] = 1 if $p.attr('class') ~~ /required/;
               }
               when 'propType' {
                 # Let's hope this is properly ordered.
@@ -85,24 +83,35 @@ for $doc.find('span.path a').each -> $a {
   %Endpoints{$group}.push: %h;
 }
 
-say Dump %Endpoints;
-exit;
+#say Dump %Endpoints;
+#dd %Endpoints.keys;
+#exit;
 
 # cw: Autogenerate code for required endpoints.
-for <characters corporation> -> $end {
-  for %Endpoints{$end} -> $ep {
-    # Determine method from Endpoint prefix
-    # Extract path parameters and replace them for method signature
-    # Extract query parameters as named arguments
-    # Extract body parameters, IF ANY as named hash argument.
-    #   - If body parameters are given, insert gode to sanity check entries.
-    #   - Build a hash containing body parameters. Create new hash, NEVER
-    #     direcly pass the parameter.
-    # Check method for final disposition
-    #   - If a GET request, then return self.makeRequest(...)
-    #   - If a PUT then return whether request succeeded after self.put
-    #   - If a DELETE then return whether request succeeded after self.delete
-    #   - If a POST then return whether request succeeded after self.post
+for <characters corporations> -> $end {
+  for @( %Endpoints{$end} ) -> $ep {
+
+      # Determine method from Endpoint prefix
+      my ($methodName,$singular);
+      my @parts = $ep<prefix>.split('/').grep({ $_ }).map( *.tc );
+      @parts = @parts.grep( * !~~ / '{' / );
+      @parts.shift if @parts.elems > 1;
+      @parts.unshift: $ep{'method'};
+      $methodName = @parts.join;
+
+      $methodName.say;
+
+      # Extract path parameters and replace them for method signature
+      # Extract query parameters as named arguments
+      # Extract body parameters, IF ANY as named hash argument.
+      #   - If body parameters are given, insert gode to sanity check entries.
+      #   - Build a hash containing body parameters. Create new hash, NEVER
+      #     direcly pass the parameter.
+      # Check method for final disposition
+      #   - If a GET request, then return self.makeRequest(...)
+      #   - If a PUT then return whether request succeeded after self.put
+      #   - If a DELETE then return whether request succeeded after self.delete
+      #   - If a POST then return whether request succeeded after self.post
   }
 
   # Write method output.
