@@ -93,8 +93,31 @@ for <characters corporations> -> $end {
 
       # Determine method from Endpoint prefix
       my ($methodName,$singular);
-      my @parts = $ep<prefix>.split('/').grep({ $_ }).map( *.tc );
-      @parts = @parts.grep( * !~~ / '{' / );
+      my @parts;
+      for $ep<prefix>.split('/').grep({ $_ }).map( *.tc ).kv -> $k, $v {
+        if $v ~~ / '{' / {
+          @parts[*-1] = do given @parts[*-1] {
+            when @parts[*-1].substr(*-1) eq 's' {
+              @parts[*-1].chop;
+            }
+
+            # cw: The above doesn't seem to catch this case for some reason.
+            when 'Events' {
+              'Event';
+            }
+
+            default {
+              @parts[*-1];
+            }
+          }
+
+        } else {
+          @parts.push($v);
+          # cw: Special casing.
+          @parts.push('Events') if $v eq 'Calendar';
+        }
+
+      }
       @parts.shift if @parts.elems > 1;
       @parts.unshift: $ep{'method'};
       $methodName = @parts.join;
