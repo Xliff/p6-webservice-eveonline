@@ -96,6 +96,7 @@ for <characters corporations> -> $end {
       my @parts;
       for $ep<prefix>.split('/').grep({ $_ }).map( *.tc ).kv -> $k, $v {
         if $v ~~ / '{' / {
+          # cw: This is really hackish, but gives the right results.
           @parts[*-1] = do given @parts[*-1] {
             when @parts[*-1].substr(*-1) eq 's' {
               @parts[*-1].chop;
@@ -122,12 +123,62 @@ for <characters corporations> -> $end {
       @parts.unshift: $ep{'method'};
       $methodName = @parts.join;
 
-      $methodName.say;
+      my @signature;
+      my @sanity_check;
 
-      # Extract path parameters and replace them for method signature
-      # Extract query parameters as named arguments
-      # Extract body parameters, IF ANY as named hash argument.
-      #   - If body parameters are given, insert gode to sanity check entries.
+      # cw: Hack! hACK! HAAAACK!
+      #     Even my eyes are crossing, and I WROTE THIS!
+      #     This routine is probably trying to do too much. It is a signature generator
+      #     that also produces code for sanity checks, but it has to handle required params (path),
+      #     named params (query) AND params to be passed by hash (body). Body params can be
+      #     arrays, and the code has to handle that variation as well.
+      my &sigCheck = -> $pp, :$n, :$hv {
+        my $vn = $hv ?? "{ $hv }<{ $pp[0] }>" !! $pp[0];
+        my $np = $n.defined ?? ':' !! '';
+        my $op = !$n.defined && $pp[2] ?? '':'?';
+        @signature.push: $np ?? "\%{ $hv }" !! "{ $np }\${ $pp[0] }{ $op }"
+          unless !$hv || @signature.any eq "\%{ $hv }";
+
+        my $type = do given $pp[1] {
+          when / [Ss]tring /         { 'Str' }
+          when / [Ii]nteger /        { 'Int' }
+          when / Array\[ (\w+) \] /  {
+            [
+              do given $/0 {
+                when /[Ss]tring/  { 'Str' }
+                when /[Ii]nteger/ { 'Int' }
+              }
+            ];
+          }
+
+          default           {
+            die "Unknown parameter type found for method '{ $methodName }' type '{ $type }'";
+          }
+        };
+
+        if $type ~~ Array {
+          @sanity_check.push qq:to/DIE/;
+                  die "Invalid type for <{ $pp[0] }>. Must be an Array of { $type[0] }s"
+                      unless { $vn }     ~~ Array &&
+                             { $vn }.all ~~ { $type[0] };
+          DIE
+        } else {
+          # cw: Further checks on standard parameters are done by the ::ESI::Base class.
+          @sanity_check.push: qq:to/DIE/;
+                  die "Invalid type for <{ $vn }>. Must be a { $type }"
+                      unless { $vn } ~~ { $type };
+          DIE
+        }
+      };
+
+      # Extract path and query parameters and generate signature and sanity checks.
+      &sigCheck($_)    for %ep<params><path>;
+      &sigCheck($_, 1) for %wp<params><query>;
+
+
+
+      # Extract body parameters, IF ANY as a hash argument.
+      #   - If body parameters are given, insert code to sanity check entries.
       #   - Build a hash containing body parameters. Create new hash, NEVER
       #     direcly pass the parameter.
       # Check method for final disposition
