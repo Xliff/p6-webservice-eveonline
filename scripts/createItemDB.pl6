@@ -223,6 +223,77 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		print '.' if $cnt++ % 1000 == 0;
 	}
   $i_sth.finish;
+	say "({$cnt})";
+
+	print "Adding reactions...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE TABLE Reactions (
+		  reactionTypeID INTEGER PRIMARYY KEY NOT NULL,
+			input INTEGER,
+			typeID INTEGER,
+			quantity INTEGER,
+			multiplier NUMERIC
+		)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Reactions_ReactID ON Reactions(reactionTypeID)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Reactions_TypeID ON Reactions(typeID)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Reactions_Input ON Reactions(input)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT
+			r.reactionTypeID,
+			r.input,
+			r.typeID,
+			r.quantity,
+			a.valueInt,
+			a.valueFloat
+		FROM invTypeReactions as r
+		INNER JOIN invTypes as t ON r.typeID=t.typeID
+		LEFT OUTER JOIN dgmTypeAttributes as a ON r.typeID=a.typeID
+		WHERE
+			t.published=1 AND
+			(a.typeId is NULL OR a.attributeId = 726)
+	STATEMENT
+
+	$i_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO Reactions (
+			reactionTypeID, input, typeID, quantity, multiplier
+		)
+		VALUES (?, ?, ?, ?, ?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+	    $o_sth.execute(
+	    	$_<reactionTypeID>,
+	    	$_<input>,
+	    	$_<typeID>,
+	    	$_<quantity>,
+	    	$_<valueInt> // $_<valueFloat> // 1
+		);
+		print '.' if $cnt++ % 100 == 0;
+	}
+  $i_sth.finish;
   say "({$cnt})\n\nDone.\n";
 
   $o_dbh.dispose;
