@@ -5,18 +5,12 @@ use v6.c;
 use DBIish;
 
 use WebService::EveOnline::EveCentral;
+use WebService::EveOnline::Assets;
 use WebService::EveOnline::ESI::Market;
 use WebService::EveOnline::SSO;
 
-my $sq_dbh;
-my %inv;
-my %bp;
-my %mats;
-my %market;
-my %options;
-my %existing;
-my $api;
-my $beatprice;
+my (%inv, %bp, %assets, %mats, %market, %options);
+my ($sq_dbh, $api, $asset-api, $beatprice);
 
 enum Filter <
 	NONE
@@ -46,8 +40,8 @@ my @hubs = <<
 # cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 #my @avoidance = (60003760, 60012412);
 
-my @stations = (60005686, 60004588, 60003760);		# Jita.
-#my @stations = (60005686, 60004588);							# NO JITA!
+#my @stations = (60005686, 60004588, 60003760);		# Jita.
+my @stations = (60005686, 60004588);							# NO JITA!
 my @avoidance;
 
 # Print error without backtrace.
@@ -98,7 +92,9 @@ sub quickLook(:$typeID) {
 	}
 	for %regionName.keys -> $r {
 		say "\t\t...in { %regionName{ $r } } (#{ $r })";
-		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID));
+		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID), :order_type('sell'));
+
+		#dd $rawdata;
 
 		for @( $rawdata<data> ) -> $rd {
 			# cw: Bail unless we are looking. This blows filter data, but we can fix
@@ -457,28 +453,46 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub getExisting($inv) {
-	say "Checking existing items...";
-	for $inv.list -> $i {
-		my ($item, $cnt) = $i.split(',');
-		my $ei = getEveItem($item);
+sub getAssets($inv) {
+	my (%char, %corp);
 
-		fatal("Item { $item } not a valid Eve Inventory item!")
-			unless $ei.defined;
+	# cw: This could actually be reusable. But where to put it?
+	my @bad_location_flags = <
+		AutoFit CorpseBay DroneBay FighterBay
+		FighterTube0 FighterTube1 FighterTube2 FighterTube3 FighterTube4
+		LoSlot0 LoSlot1 LoSlot2 LoSlot3 LoSlot4 LoSlot5 LoSlot6 LoSlot7
+		MedSlot0 MedSlot1 MedSlot2 MedSlot3 MedSlot4 MedSlot5 MedSlot6 MedSlot7
+		HiSlot0 HiSlot1 HiSlot2 HiSlot3 HiSlot4 HiSlot5 HiSlot6 HiSlot7
+		RigSlot0 RigSlot1 RigSlot2 RigSlot3 RigSlot4 RigSlot5 RigSlot6 RigSlot7
+		SubSystemBay SubSystemSlot0 SubSystemSlot1 SubSystemSlot2 SubSystemSlot3 SubSystemSlot4
+		SubSystemSlot5 SubSystemSlot6 SubSystemSlot7
+		Implant Wardrobe
+	>;
 
-		%inv{ $ei<typeID> } = $cnt;
+	if %extras<inv> eq <char all>.any {
+		say "Checking character assets...";
+		%assets.append: $asset-api.getCharacterAssets(%inv.keys);
 	}
+
+	if %extras<inv> eq <corp all>.any {
+		say "Checking corporation assets...";
+		%assets.append $asset-api.getCorporationAssets(%inv.keys);
+	}
+
+	# cw: How are we going to handle existing assets?
 }
 
 sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
 	# Process slurped options.
 	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;
 
-	# Process existing inventory, if specified.
-	getExisting(%extras<existing>) if %extras<existing>.defined;
-
+	# Open statid data...
 	openStaticDB($sqlite);
+  # Get required type ids for BP.
 	getIDs($type_id);
+	# Process existing inventory, if specified.
+	getAssets(%extras<inv>) if %extras<inv>.defined;
+
 	retrieveMarketData;
 
 	my $item_name = $bpname;
@@ -572,6 +586,12 @@ sub USAGE {
 		  --beatprice   Set the "price to beat", If specified, the program will
 		                compare the computed manifest price to this price and
 		                will display the difference.
+
+      --inv         Check inventory for necessary items. Legitimate values are:
+			                  char - Check only your character's inventory
+												corp - Check only your corporation's inventory
+												       (Requires proper corporation access)
+											  all  - Check all inventories that you have access to
     USAGE
 }
 
@@ -584,6 +604,9 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 		$beatprice = %extras<beatprice>;
 	}
 
+	die "--inv option must be one of: char, corp or all."
+	  unless %extras<inv> eq <char corp all>.any;
+
 	openStaticDB($sqlite);
 
 	given (%extras<api> // 'ec').lc {
@@ -593,13 +616,19 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 
 		when 'esi' {
 			my $sso = WebService::EveOnline::SSO.new(
-				:scopes([ "esi-markets.structure_markets.v1" ]),
+				:scopes(<
+					esi-markets.structure_markets.v1
+					esi-assets.read_assets.v1
+					esi-assets.read_corporation_assets.v1
+				>),
 				:realm('ESI')
 			);
 			$sso.getToken;
 			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);
 		}
 	}
+
+	$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
 
 	my $bpname = $type_name;
 	$bpname ~= " Blueprint" unless $bpname ~~ m:i/Blueprint$/;

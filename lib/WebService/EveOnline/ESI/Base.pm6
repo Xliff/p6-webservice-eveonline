@@ -1,13 +1,12 @@
 use v6.c;
 
+use WebService::EveOnline::Base;
 use WebService::EveOnline::RESTBase;
 use WebService::EveOnline::Utils;
 
 class WebService::EveOnline::ESI::Base {
 	also is WebService::EveOnline::RESTBase;
 
-  # cw: May need to move these methods into an ESI Base class.
-  # =
   has $!type;
 
   submethod BUILD(:$type) {
@@ -43,7 +42,16 @@ class WebService::EveOnline::ESI::Base {
     self.new($sso, $type, :$useragent);
   }
 
-  method requestByPrefix($prefix, :$datasource, *%args) {
+	method type {
+		$!type;
+	}
+
+  method requestByPrefix(
+		$prefix,
+		:$datasource,
+		:$method = RequestMethod::GET,
+		*%args
+	) {
     my $url = "{ $.request-prefix }{ $prefix }";
 		my $nf = 0;
 
@@ -56,13 +64,13 @@ class WebService::EveOnline::ESI::Base {
 			$nf = 1;
 		}
 		for %args.keys -> $k {
-			$url ~= "{ $nf ?? '&' !! '?' }{ $k }={ %args{$k} }" if $%args{$k};
+			$url ~= "{ $nf ?? '&' !! '?' }{ $k }={ %args{$k} }" if %args{$k};
 			$nf = 1 unless $nf;
 		}
 
-    #say "U: $url";
+		#say "ESI-U: $url";
 
-    self.makeRequest($url);
+    self.makeRequest($url, :$method);
   }
 
 }

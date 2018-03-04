@@ -269,20 +269,20 @@ class WebService::EveOnline::Base {
 
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
 		$response = do given $method {
-			when GET {
-				$!http_client.get($url,  :header(%( $header )));
+			when RequestMethod::GET {
+				$!http_client.get($url, :header(%( $header )));
 			}
 
-			when POST {
+			when RequestMethod::POST {
 				$!http_client.post($url, :form(%( $form )), :header(%( $header )));
 			}
 
-			when DELETE {
+			when RequestMethod::DELETE {
 				$!http_client.delete($url, :header(%( $header )));
 			}
 
-			when PUT {
-				$!http_client.put($url, :form(%( $form ), :header(%( $header ))));
+			when RequestMethod::PUT {
+				$!http_client.put($url, :form(%( $form )), :header(%( $header )));
 			}
 		};
 

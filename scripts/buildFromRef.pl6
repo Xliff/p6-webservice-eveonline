@@ -83,10 +83,6 @@ for @( $doc.find('span.path a').to_array ) -> $a {
   %Endpoints{$group}.push: %h;
 }
 
-#say Dump %Endpoints;
-#dd %Endpoints.keys;
-#exit;
-
 # cw: Autogenerate code for required endpoints.
 for <characters corporations> -> $end {
   for @( %Endpoints{$end} ) -> $ep {
@@ -111,7 +107,6 @@ for <characters corporations> -> $end {
               @parts[*-1];
             }
           }
-
         } else {
           @parts.push($v);
           # cw: Special casing.
@@ -156,31 +151,41 @@ for <characters corporations> -> $end {
           }
         };
 
-        if $type ~~ Array {
-          @sanity_check.push qq:to/DIE/;
-                  die "Invalid type for <{ $pp[0] }>. Must be an Array of { $type[0] }s"
-                      unless { $vn }     ~~ Array &&
-                             { $vn }.all ~~ { $type[0] };
-          DIE
-        } else {
-          # cw: Further checks on standard parameters are done by the ::ESI::Base class.
-          @sanity_check.push: qq:to/DIE/;
-                  die "Invalid type for <{ $vn }>. Must be a { $type }"
-                      unless { $vn } ~~ { $type };
-          DIE
+        given $type {
+          when Array {
+            @sanity_check.push qq:to/DIE/;
+                    die "Invalid type for <{ $pp[0] }>. Must be an Array of { $type[0] }"
+                        unless { $vn }     ~~ Array &&
+                               { $vn }.all ~~ { $type[0] };
+            DIE
+          }
+
+          when 'Body' {
+          }
+
+          default {
+            # cw: Further checks on standard parameters are done by the ::ESI::Base class.
+            @sanity_check.push: qq:to/DIE/;
+                    die "Invalid type for <{ $vn }>. Must be a { $type }"
+                        unless { $vn } ~~ { $type };
+            DIE
+          }
         }
       };
 
       # Extract path and query parameters and generate signature and sanity checks.
-      &sigCheck($_)    for %ep<params><path>;
-      &sigCheck($_, 1) for %wp<params><query>;
-
-
+      &sigCheck($_)     for %ep<params><path>;
+      &sigCheck($_, :n) for %ep<params><query>;
 
       # Extract body parameters, IF ANY as a hash argument.
       #   - If body parameters are given, insert code to sanity check entries.
+      if %ep<params><body> {
+        my %bps := %ep<params><body>;
+        &sigCheck(%bps{$_}, :hv($_)) for %bps.keys;
+      }
       #   - Build a hash containing body parameters. Create new hash, NEVER
       #     direcly pass the parameter.
+
       # Check method for final disposition
       #   - If a GET request, then return self.makeRequest(...)
       #   - If a PUT then return whether request succeeded after self.put
