@@ -130,7 +130,7 @@ for <characters corporations> -> $end {
       my &sigCheck = -> $pp, :$n, :$hv {
         my $vn = $hv ?? "{ $hv }<{ $pp[0] }>" !! $pp[0];
         my $np = $n.defined ?? ':' !! '';
-        my $op = !$n.defined && $pp[2] ?? '':'?';
+        my $op = !$n.defined && $pp[2] ?? '' !! '?';
         @signature.push: $np ?? "\%{ $hv }" !! "{ $np }\${ $pp[0] }{ $op }"
           unless !$hv || @signature.any eq "\%{ $hv }";
 
@@ -139,7 +139,7 @@ for <characters corporations> -> $end {
           when / [Ii]nteger /        { 'Int' }
           when / Array\[ (\w+) \] /  {
             [
-              do given $/0 {
+              do given $pp[0] {
                 when /[Ss]tring/  { 'Str' }
                 when /[Ii]nteger/ { 'Int' }
               }
@@ -153,7 +153,7 @@ for <characters corporations> -> $end {
 
         given $type {
           when Array {
-            @sanity_check.push qq:to/DIE/;
+            @sanity_check.push: qq:to/DIE/;
                     die "Invalid type for <{ $pp[0] }>. Must be an Array of { $type[0] }"
                         unless { $vn }     ~~ Array &&
                                { $vn }.all ~~ { $type[0] };
@@ -174,13 +174,13 @@ for <characters corporations> -> $end {
       };
 
       # Extract path and query parameters and generate signature and sanity checks.
-      &sigCheck($_)     for %ep<params><path>;
-      &sigCheck($_, :n) for %ep<params><query>;
+      &sigCheck($_)     for $ep<params><path>;
+      &sigCheck($_, :n) for $ep<params><query>;
 
       # Extract body parameters, IF ANY as a hash argument.
       #   - If body parameters are given, insert code to sanity check entries.
-      if %ep<params><body> {
-        my %bps := %ep<params><body>;
+      if $ep<params><body> {
+        my %bps := $ep<params><body>;
         &sigCheck(%bps{$_}, :hv($_)) for %bps.keys;
       }
       #   - Build a hash containing body parameters. Create new hash, NEVER

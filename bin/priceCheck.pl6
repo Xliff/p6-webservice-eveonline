@@ -561,7 +561,8 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 	retrieveMarketData;
 
 	sub mq($a) {
-		say "{'=' x $a.chars}\n{$a}\n{'=' x $a.chars}";
+		my $m = "{'=' x $a.chars}";
+		say "{$m}\n{$a}\n{$m}";
 	};
 
 	my %cart = getShoppingCart;

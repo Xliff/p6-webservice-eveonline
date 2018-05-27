@@ -14,7 +14,7 @@ class WebService::EveOnline::ESI::Insurance {
 	}
 
 	method getKillMail($id, $hash, :$datasource) {
-		self.requestByPrefix("{ $id }/{ $hsah }", :$datasource, :$language);
+		self.requestByPrefix("{ $id }/{ $hash }", :$datasource, :$language);
 	}
 
 	# method getCorpMails - Alias to getCorporationMails.
