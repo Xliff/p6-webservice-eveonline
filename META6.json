@@ -21,7 +21,10 @@
 	  "Data::Dumper",
 	  "DBIish",
 	  "DateTime::Parse",
-	  "HTTP::UserAgent"
+	  "HTTP::UserAgent",
+	  "JSON::Fast",
+	  "Base64",
+	  "HTML::Parser::XML",
   ],
   "description" : "A market assistance and automation library for Eve Online. Includes support for Eve-Central API, and CCP's XML, CREST and ESI APIs"
 }

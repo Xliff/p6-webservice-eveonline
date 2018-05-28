@@ -5,7 +5,7 @@ use v6.c;
 use DBIish;
 
 use WebService::EveOnline::EveCentral;
-use WebService::EveOnline::Assets;
+use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Market;
 use WebService::EveOnline::SSO;
 
@@ -160,7 +160,7 @@ sub retrieveMarketData {
 						%m<quicklook><sell_orders><order>.grep:
 							{
 								$_.defined &&
-									$_<station> == any(@hubs)
+									$_<station> == any(%hubs.keys)
 									&&
 									$_<station> !== any(@avoidance)
 							}
@@ -169,7 +169,7 @@ sub retrieveMarketData {
 						%m<quicklook><buy_orders><order>.grep:
 							{
 								$_.defined &&
-									$_<station> == any(@hubs)
+									$_<station> == any(%hubs.keys)
 									&&
 									$_<station> !== any(@avoidance)
 							}
@@ -453,7 +453,7 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub getAssets($inv) {
+sub getAssets($inv, *%extras) {
 	my (%char, %corp);
 
 	# cw: This could actually be reusable. But where to put it?
@@ -476,7 +476,7 @@ sub getAssets($inv) {
 
 	if %extras<inv> eq <corp all>.any {
 		say "Checking corporation assets...";
-		%assets.append $asset-api.getCorporationAssets(%inv.keys);
+		#%assets.append $asset-api.getCorporationAssets(%inv.keys);
 	}
 
 	# cw: How are we going to handle existing assets?
@@ -491,30 +491,31 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 		$beatprice = %extras<beatprice>;
 	}
 
-	my $asset-api;
-	if %extras<inv> eq <char corp all>.any {
-		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
-	} else {
-		die "--inv option must be one of: char, corp or all.";
-	}
-
+	my $sso;
 	given (%extras<api> // 'esi').lc {
 		when 'ec' | 'evecentral' {
 			$api = WebService::EveOnline::EveCentral.new;
 		}
 
 		when 'esi' {
-			my $sso = WebService::EveOnline::SSO.new(
+			$sso = WebService::EveOnline::SSO.new(
 				:scopes(<
 					esi-markets.structure_markets.v1
 					esi-assets.read_assets.v1
 					esi-assets.read_corporation_assets.v1
 				>),
-				:realm('ESI')
+				:realm('ESI'),
 			);
 			$sso.getToken;
 			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);
 		}
+	}
+
+	my $asset-api;
+	if %extras<inv> eq <char corp all>.any {
+		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
+	} else {
+		die "--inv option must be one of: char, corp or all.";
 	}
 
 	# Process slurped options.
@@ -523,8 +524,7 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 	# Open statid data...
 	openStaticDB($sqlite);
 
-	## XXX -BEGIN- Resolve various item passing schemes
-	my $bpname, $item;
+	## XXX -BEGIN- Resolve various item passing scheme
 	if $type_name {
 		my $item = getEveItem($type_name);
 		fatal("No item found matching '$bpname'.\n") unless $item.defined;
@@ -641,10 +641,6 @@ sub USAGE {
     USAGE
 }
 
-multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
-	actualMAIN(:$type_name, :$bpname, :$sqlite, :%extras);
-}
-
-multi sub MAIN (Int :$type_id!, Str :$sqlite, :$item, *%extras) {
-	actualMAIN(:$type_id, :$sqlite, :%extras);
+sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
+	actualMAIN(:$type_name, :$sqlite, :%extras);
 }

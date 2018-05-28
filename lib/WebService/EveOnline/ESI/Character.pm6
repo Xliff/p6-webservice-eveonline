@@ -13,9 +13,9 @@ class WebService::EveOnline::ESI::Character {
 		die "<characterIDs> must be a list of integers"
 			unless @characterIDs.all() ~~ Int;
 
-		my %extras = {
+		my %extras = (
 			characters => @characterIDs.join(','),
-		};
+		);
 
 		# cw: XXX - THIS IS A POST REQUEST
 #		self.requestByPrefix('affiliation', :$datasource, |%extras);
@@ -25,9 +25,9 @@ class WebService::EveOnline::ESI::Character {
 		die "<characterIDs> must be a list of integers"
 			unless @characterIDs.all() ~~ Int;
 
-		my %extras = {
+		my %extras = (
 			character_ids => @characterIDs.join(','),
-		};
+		);
 
 		self.requestByPrefix('names', :$datasource, |%extras);
 	}
@@ -40,7 +40,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterAgents($characterID, :$datasource) {
-		checkScope('esi-characters.read_agents_research.v1');
+		self.checkScope('esi-characters.read_agents_research.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -48,7 +48,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterBlueprints($characterID, :$datasource) {
-		checkScope('esi-characters.read_blueprints.v1');
+		self.checkScope('esi-characters.read_blueprints.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -63,20 +63,20 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCaracterCSPA(@characterIDs, :$datasource) {
-		checkScope('esi-characters.read_contacts.v1');
+		self.checkScope('esi-characters.read_contacts.v1');
 		die "<characterIDs> must be a list of integers"
 			unless @characterIDs.all() ~~ Int;
 
-		my %extras = {
+		my %extras = (
 			characters => @characterIDs.join(','),
-		};
+		);
 
 		# cw: XXX - THIS IS A POST REQUEST
 #		self.requestByPrefix('cspa', :$datasource, |%extras);
 	}
 
 	method getCharacterFatigue($characterID, :$datasource) {
-		checkScope('esi-characters.read_fatigue.v1');
+		self.checkScope('esi-characters.read_fatigue.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -84,7 +84,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterMedals($characterID, :$datasource) {
-		checkScope('esi-characters.read_medals.v1');
+		self.checkScope('esi-characters.read_medals.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -92,7 +92,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterNotifications($characterID, :$datasource) {
-		checkScope('esi-characters.read_notifications.v1');
+		self.checkScope('esi-characters.read_notifications.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -100,7 +100,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterNotificationContracts($characterID, :$datasource) {
-		checkScope('esi-characters.read_notifications.v1');
+		self.checkScope('esi-characters.read_notifications.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -115,7 +115,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterRoles($characterID, :$datasource) {
-		checkScope('esi-characters.read_corporation_roles.v1');
+		self.checkScope('esi-characters.read_corporation_roles.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -123,7 +123,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterStandings($characterID, :$datasource) {
-		checkScope('esi-characters.read_standings.v1');
+		self.checkScope('esi-characters.read_standings.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -131,7 +131,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterStats($characterID, :$datasource) {
-		checkScope('esi-characterstats.read.v1');
+		self.checkScope('esi-characterstats.read.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
@@ -139,7 +139,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method getCharacterTitles($characterID, :$datasource) {
-		checkScope('esi-characters.read_titles.v1');
+		self.checkScope('esi-characters.read_titles.v1');
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
