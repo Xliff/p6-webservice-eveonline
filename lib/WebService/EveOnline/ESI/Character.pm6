@@ -14,11 +14,14 @@ class WebService::EveOnline::ESI::Character {
 			unless @characterIDs.all() ~~ Int;
 
 		my %extras = (
-			characters => @characterIDs.join(','),
+			DATA => {
+				characters => @characterIDs.join(','),
+			},
 		);
 
-		# cw: XXX - THIS IS A POST REQUEST
-#		self.requestByPrefix('affiliation', :$datasource, |%extras);
+		self.requestByPrefix(
+			'affiliation', :$datasource, :method(RequestMethod::POST), |%extras
+		);
 	}
 
 	method getCharacterNames(@characterIDs, :$datasource) {
@@ -68,11 +71,14 @@ class WebService::EveOnline::ESI::Character {
 			unless @characterIDs.all() ~~ Int;
 
 		my %extras = (
-			characters => @characterIDs.join(','),
+			DATA => {
+				characters => @characterIDs.join(','),
+			}
 		);
 
-		# cw: XXX - THIS IS A POST REQUEST
-#		self.requestByPrefix('cspa', :$datasource, |%extras);
+		self.requestByPrefix(
+			'cspa', :$datasource, :method(RequestMethod::POST), %extras
+		);
 	}
 
 	method getCharacterFatigue($characterID, :$datasource) {
