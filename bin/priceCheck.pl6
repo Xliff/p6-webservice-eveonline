@@ -395,10 +395,10 @@ sub commaize($_v) {
 
 	$_v ~~ / '.' (\d ** 2) /;
 	my $decimal = $/[0];
-	$decimal ~= '0' if $decimal.chars < 2;
+	$decimal ~= '0' if $decimal && $decimal.chars < 2;
 
 	my $v = $_v.Int;
-	my $c = "{$v.flip.comb(3).join(',').flip}.{$decimal}";
+	my $c = "{$v.flip.comb(3).join(',').flip}.{$decimal // '00'}";
 	my $s = '';
 	$s = ' ' x ($length - $c.chars) if $length > $c.chars;
 	"$s$c";
@@ -585,10 +585,14 @@ sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
 	if %cart {
 		# cw: This MUST be redone, because the intent is NOT for this to become a
 		#     single item list.
+
+		# cw: My personal nemesis that WILL be squashed on MONDAY
+		#     MOOONDAAAAY!
 		mq(
 			( "Shopping List" ~
 			  ($item.elems == 1 ?? " for item: $item<typeName>" !! '') )
 		);
+
 		for %cart.keys -> $k {
 			say "$k:";
 			for @(%cart{$k}) -> $o {
@@ -603,7 +607,6 @@ sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
 				(
 					'',
 					$o<station>.substr(0,40),
-					"\t",
 					$o<count>,
 					commaize($o<unit_price>),
 					commaize($o<subtotal>)
