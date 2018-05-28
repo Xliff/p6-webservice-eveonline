@@ -5,7 +5,7 @@ use v6.c;
 use DBIish;
 
 use WebService::EveOnline::EveCentral;
-use WebService::EveOnline::Assets;
+use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Market;
 use WebService::EveOnline::SSO;
 
@@ -51,7 +51,7 @@ sub fatal($msg) {
 }
 
 sub quickLook(:$typeID) {
-	return $api.quicklook(:$typeID) if $api ~~ WebService::EveOnline::EveCentral;
+	return $api.quickLook(:$typeID) if $api ~~ WebService::EveOnline::EveCentral;
 
 	sub getSecLev($id) {
 		state %sec_cache;
@@ -453,7 +453,7 @@ sub getIDs(Int $typeID) {
 	}
 }
 
-sub getAssets($inv) {
+sub getAssets(%extras) {
 	my (%char, %corp);
 
 	# cw: This could actually be reusable. But where to put it?
@@ -469,14 +469,16 @@ sub getAssets($inv) {
 		Implant Wardrobe
 	>;
 
-	if %extras<inv> eq <char all>.any {
-		say "Checking character assets...";
-		%assets.append: $asset-api.getCharacterAssets(%inv.keys);
-	}
+	if %extras<inv> {
+		if %extras<inv> eq <char all>.any {
+			say "Checking character assets...";
+			%assets.append: $asset-api.getCharacterAssets(%inv.keys);
+		}
 
-	if %extras<inv> eq <corp all>.any {
-		say "Checking corporation assets...";
-		%assets.append $asset-api.getCorporationAssets(%inv.keys);
+		if %extras<inv> eq <corp all>.any {
+			say "Checking corporation assets...";
+			%assets.append: $asset-api.getCorporationAssets(%inv.keys);
+		}
 	}
 
 	# cw: How are we going to handle existing assets?
@@ -491,7 +493,7 @@ sub actualMAIN(:$type_id, :$bpname, :$sqlite, :%extras) {
   # Get required type ids for BP.
 	getIDs($type_id);
 	# Process existing inventory, if specified.
-	getAssets(%extras<inv>) if %extras<inv>.defined;
+	getAssets(%extras) if %extras;
 
 	retrieveMarketData;
 
@@ -604,8 +606,10 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 		$beatprice = %extras<beatprice>;
 	}
 
-	die "--inv option must be one of: char, corp or all."
-	  unless %extras<inv> eq <char corp all>.any;
+	if %extras<inv> {
+		die "--inv option must be one of: char, corp or all."
+	  	unless %extras<inv> eq <char corp all>.any;
+	}
 
 	openStaticDB($sqlite);
 
@@ -625,10 +629,9 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 			);
 			$sso.getToken;
 			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);
+			$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
 		}
 	}
-
-	$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
 
 	my $bpname = $type_name;
 	$bpname ~= " Blueprint" unless $bpname ~~ m:i/Blueprint$/;
