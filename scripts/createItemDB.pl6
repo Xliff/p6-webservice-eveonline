@@ -34,7 +34,8 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 		CREATE TABLE invTypes (
 			typeID INTEGER PRIMARY KEY NOT NULL,
 			groupID INTEGER NOT NULL,
-			typeName VARCHAR(100)
+			typeName VARCHAR(100),
+			bpID INTEGER 
 		)
 	STATEMENT
 
@@ -47,22 +48,22 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	$o_sth.execute();
 
 	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
-		SELECT typeID, groupID, typeName
-		FROM invTypes
-		ORDER BY typeID
+		SELECT i.typeID, i.groupID, i.typeName, ii.typeID as bpID
+		FROM invTypes i
+		LEFT JOIN invTypes ii on ii.typeName = CONCAT(i.typeName, ' Blueprint')
   STATEMENT
 
   $i_sth.execute();
 
   $o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-		INSERT INTO invTypes (typeID, groupID, typeName)
-		VALUES (?, ?, ?)
+		INSERT INTO invTypes (typeID, groupID, typeName, bpID)
+		VALUES (?, ?, ?, ?)
 	STATEMENT
 
 	@data = $i_sth.allrows(:array-of-hash);
 	$cnt = 0;
 	for @data {
-    	$o_sth.execute($_<typeID>, $_<groupID>, $_<typeName>);
+    	$o_sth.execute($_<typeID>, $_<groupID>, $_<typeName>, $_<bpID>);
     	print '.' if $cnt++ % 1000 == 0;
 	}
   $i_sth.finish;

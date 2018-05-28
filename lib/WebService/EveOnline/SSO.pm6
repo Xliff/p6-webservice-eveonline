@@ -138,7 +138,7 @@ class WebService::EveOnline::SSO {
 		# cw: -YYY-
 		#     At this point, if URL has "/Account/LogOn" in it, then we've
 		#     failed the authorization phase and should throw an exception.
-		say "U: $url";
+		#say "U: $url";
 
 		{
 			$response = $!client.get($url);

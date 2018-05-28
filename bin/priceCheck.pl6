@@ -40,8 +40,8 @@ my %hubs = (
 # cw: Personal prefernce keeps me out of Jita and WTF is Agil?
 #my @avoidance = (60003760, 60012412);
 
-#my @stations = (60005686, 60004588, 60003760);		# Jita.
-my @stations = (60005686, 60004588);							# NO JITA!
+my @stations = (60005686, 60004588, 60003760);		# Jita.
+#my @stations = (60005686, 60004588);							# NO JITA!
 my @avoidance;
 
 # Print error without backtrace.
@@ -392,7 +392,9 @@ sub getShoppingCart {
 # cw: Really need a module to say "comma-ize this number"
 sub commaize($_v) {
 	my $length = 18;
-	my $decimal = $_v ~~ / '.' / ?? $_v.subst(/ \d+ '.'/, '') !! '00';
+
+	$_v ~~ / '.' (\d ** 2) /;
+	my $decimal = $/[0];
 	$decimal ~= '0' if $decimal.chars < 2;
 
 	my $v = $_v.Int;
@@ -434,6 +436,9 @@ sub getIDs(Int $typeID) {
 		# Compute necessary amounts with ME reduction.
 		my $needed = ($r[3] * (1 - (%options<me> // 0))).ceiling;
 		$needed -= %inv{ $r[2] } if %inv{ $r[2] }.defined;
+		# XXXXXXXXXXXXX
+		# cw: If this is going to be list based, then we need to ADD to this list,
+		#     not blindly push it.
 		%bp<materials>.push: [ $r[2], $needed ] if $r[1] == 1 && $needed > 0;
 	}
 	$sth.finish;
@@ -476,13 +481,16 @@ sub getAssets($inv, *%extras) {
 
 	if %extras<inv> eq <corp all>.any {
 		say "Checking corporation assets...";
-		#%assets.append $asset-api.getCorporationAssets(%inv.keys);
+		%assets.append: $asset-api.getCorporationAssets(%inv.keys);
 	}
 
 	# cw: How are we going to handle existing assets?
 }
 
-sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
+sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
+	die "You must specify either <type_id> or <type_name>!"
+		unless $type_id || $type_name;
+
 	if %extras<beatprice>.defined {
 		die "--beatprice option must be a positive number!"
 			unless 	%extras<beatprice>.Num ~~ Num &&
@@ -524,35 +532,41 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 	# Open statid data...
 	openStaticDB($sqlite);
 
-	## XXX -BEGIN- Resolve various item passing scheme
-	if $type_name {
-		my $item = getEveItem($type_name);
-		fatal("No item found matching '$type_name'.\n") unless $item.defined;
+	# If type_name then do:
+	#   1) Get item from database using name.
+	#      a) If item does not exist, die.
+	#		2) Check if item has a blueprint
+	#   3) If --drilldown is not specified, STOP
+	#   4) Get item BLUEPRINT from database
+	#   5) Pass blueprint data to getIDs
+	# EVENTUALLY
+	#   - Allow type_name to take comma separated list, following above rules.
+	#     I am TOO TIRED to do it now.
+
+	# If type_id do:
+	#   1) Get item from database using id
+	#      a) If item does not exist, die.
+	#   2) Go to type_name, step 2.
+
+	my $item = getEveItem($type_name // $type_id);
+
+	fatal(
+		"No item found matching " ~
+		($type_id ?? "ID #{$type_id}" !! "'$type_name'") ~
+		"\n"
+	) unless $item.defined;
+
+	# cw: When you are getting your data structures CONF00SL3D, then it's time
+	#     to refactor. This is due to code being shamelessly ripped from priceBP.
+	#     Since this is a more general purpose script, we will need to add a TRUE
+	#     manifest structure.
+	#     For now... hack it till you back it.
+	if %extras<drilldown> {
+		getIDs($item<bpID>);
+	} else {
+		%bp<materials>.push: [ $item<typeID>, 1 ];
+		%inv{ $item<typeID> } = $item<typeName>;
 	}
-
-  # Get required type ids for BP.
-	getIDs($type_id);
-
-	my $item_name = $type_name;
-	unless $item_name.defined {
-		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-			SELECT typeName
-			FROM invTypes
-			WHERE
-				typeID = ?
-	  STATEMENT
-
-		$sth.execute($type_id);
-
-		my @result = $sth.allrows;
-		if @result.elems == 1 {
-			$item_name = @result[0][0];
-		} else {
-			fatal("ERROR! Could not retrieve item name with type_id.");
-		}
-	}
-	$item_name = $item_name.wordcase;
-	## XXX -END- Resolve various item passing schemes
 
 	# Process existing inventory, if specified.
 	getAssets(%extras<inv>) if %extras<inv>.defined;
@@ -566,11 +580,15 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 
 	my %cart = getShoppingCart;
 	my $total = 0;
-	my @leftovers = %bp<materials>.grep: { $_[1] > 0 };
+	my @leftovers = %bp<materials>.grep({ $_[1] > 0 });
 
 	if %cart {
-
-		mq("Shopping List for: {$item_name}");
+		# cw: This MUST be redone, because the intent is NOT for this to become a
+		#     single item list.
+		mq(
+			( "Shopping List" ~
+			  ($item.elems == 1 ?? " for item: $item<typeName>" !! '') )
+		);
 		for %cart.keys -> $k {
 			say "$k:";
 			for @(%cart{$k}) -> $o {
@@ -632,6 +650,9 @@ sub USAGE {
 		                compare the computed manifest price to this price and
 		                will display the difference.
 
+		  --drilldown   If this parameter is specified, then any blueprints in the
+		                item list will be added to the search manifest.
+
       --inv         Check inventory for necessary items. Legitimate values are:
 			                  char - Check only your character's inventory
 												corp - Check only your corporation's inventory
@@ -640,6 +661,6 @@ sub USAGE {
     USAGE
 }
 
-sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
-	actualMAIN(:$type_name, :$sqlite, :%extras);
+sub MAIN (Str :$type_name, Int :$type_id, Str :$sqlite, *%extras) {
+	actualMAIN(:$type_name, :$type_id, :$sqlite, :%extras);
 }
