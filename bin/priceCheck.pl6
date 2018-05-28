@@ -9,7 +9,7 @@ use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Market;
 use WebService::EveOnline::SSO;
 
-my (%inv, %bp, %assets, %mats, %market, %options);
+my (%inv, %manifest, %assets, %mats, %market, %options);
 my ($sq_dbh, $api, $asset-api, $beatprice);
 
 enum Filter <
@@ -133,8 +133,8 @@ sub retrieveMarketData {
 	my $seclev = 0.5;
 	my $region;
 
-	for %bp<materials>.map( { $_[0] } ) -> $k {
-		say "\t{ %inv{$k} }...";
+	for %manifest.keys.sort -> $k {
+		say "\t{ %manifest{$k}<name> }...";
 
 		# cw: Since Eve-Central is down at this time of writing, we are adding support
 		#     for ESI. Too make things easier, we need to abstract away the difference.
@@ -358,9 +358,8 @@ sub getEveItem($lookup) {
 sub getShoppingCart {
 	my %cart;
 
-	for %bp<materials>.list -> $i {
-		my $k = $i[0];
-		my $count := $i[1];
+	for %manifest.kv -> $k, $v {
+		my $count := $v<count>;
 		my $minVol= $count / 10;
 		my $idx = 0;
 
@@ -425,6 +424,8 @@ sub getIDs(Int $typeID) {
 	my $me = '';
 	$me = "(ME = { %options<me> * 100 }) " if %options<me>.defined;
 	say "Fetching blueprint data {$me}(type_id = {$typeID}) ...";
+
+	# cw: Would it be worth it to cache any of this?
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
 		SELECT typeId, activityId, materialTypeId, quantity
 		FROM industryActivityMaterials
@@ -436,26 +437,15 @@ sub getIDs(Int $typeID) {
 		# Compute necessary amounts with ME reduction.
 		my $needed = ($r[3] * (1 - (%options<me> // 0))).ceiling;
 		$needed -= %inv{ $r[2] } if %inv{ $r[2] }.defined;
-		# XXXXXXXXXXXXX
-		# cw: If this is going to be list based, then we need to ADD to this list,
-		#     not blindly push it.
-		%bp<materials>.push: [ $r[2], $needed ] if $r[1] == 1 && $needed > 0;
+		if $r[1] == 1 {
+			%manifest{ $r[2] } //= {
+				name		=> %inv{ $r[2] },
+				count   => 0,
+			};
+			%manifest{ $r[2]  }<count> += $needed;
+		}
 	}
 	$sth.finish;
-
-	say "Fetching item data...";
-	my @materials = %bp<materials>.map: { $_[0] };
-	$sth = $sq_dbh.prepare(qq:to/STATEMENT/);
-		SELECT typeID, typeName
-		FROM invTypes
-		WHERE
-			typeID IN ( { ('?' xx @materials.elems).join(',') } )
-	STATEMENT
-
-	$sth.execute(@materials);
-	for @($sth.allrows) -> $r {
-		%inv{$r[0]} = $r[1];
-	}
 }
 
 sub getAssets($inv, *%extras) {
@@ -487,10 +477,7 @@ sub getAssets($inv, *%extras) {
 	# cw: How are we going to handle existing assets?
 }
 
-sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
-	die "You must specify either <type_id> or <type_name>!"
-		unless $type_id || $type_name;
-
+sub actualMAIN(:$sqlite, :%extras, *@items) {
 	if %extras<beatprice>.defined {
 		die "--beatprice option must be a positive number!"
 			unless 	%extras<beatprice>.Num ~~ Num &&
@@ -525,47 +512,74 @@ sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
 			unless %extras<inv> eq <char corp all>.any;
 		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest)
 	}
-
 	# Process slurped options.
 	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;
 
 	# Open statid data...
 	openStaticDB($sqlite);
 
-	# If type_name then do:
-	#   1) Get item from database using name.
-	#      a) If item does not exist, die.
-	#		2) Check if item has a blueprint
-	#   3) If --drilldown is not specified, STOP
-	#   4) Get item BLUEPRINT from database
-	#   5) Pass blueprint data to getIDs
-	# EVENTUALLY
-	#   - Allow type_name to take comma separated list, following above rules.
-	#     I am TOO TIRED to do it now.
+	# Preload the entire item id/name database;
+	# May want to rethink this if it takes too long.
+	say "Fetching item data...";
+	{
+		my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
+			SELECT typeID, typeName
+			FROM invTypes
+		STATEMENT
 
-	# If type_id do:
-	#   1) Get item from database using id
-	#      a) If item does not exist, die.
-	#   2) Go to type_name, step 2.
+		$sth.execute();
+		for @($sth.allrows) -> $r {
+			%inv{ $r[0] } = $r[1];
+		}
+		$sth.finish;
+	}
 
-	my $item = getEveItem($type_name // $type_id);
+	# cw: We must now populate the manifest from the listed arguments.
+	for @items -> $i {
+		my $item = getEveItem($i);
 
-	fatal(
-		"No item found matching " ~
-		($type_id ?? "ID #{$type_id}" !! "'$type_name'") ~
-		"\n"
-	) unless $item.defined;
+		# If type_name then do:
+		#   1) Get item from database using name.
+		#      a) If item does not exist, die.
+		#		2) Check if item has a blueprint
+		#   3) If --drilldown is not specified, STOP
+		#   4) Get item BLUEPRINT from database
+		#   5) Pass blueprint data to getIDs
+		# EVENTUALLY
+		#   - Allow type_name to take comma separated list, following above rules.
+		#     I am TOO TIRED to do it now.
 
-	# cw: When you are getting your data structures CONF00SL3D, then it's time
-	#     to refactor. This is due to code being shamelessly ripped from priceBP.
-	#     Since this is a more general purpose script, we will need to add a TRUE
-	#     manifest structure.
-	#     For now... hack it till you back it.
-	if %extras<drilldown> {
-		getIDs($item<bpID>);
-	} else {
-		%bp<materials>.push: [ $item<typeID>, 1 ];
-		%inv{ $item<typeID> } = $item<typeName>;
+		# If type_id do:
+		#   1) Get item from database using id
+		#      a) If item does not exist, die.
+		#   2) Go to type_name, step 2.
+
+		fatal(
+			"No item found matching " ~ {do given $i {
+				when Int { "ID #{$i}" }
+				when Str { "'{$i}'"   }
+			}} ~ "\n"
+		) unless $item.defined;
+
+		# Shortcuts for item list:
+	  # Adding :B to the end of the item implies you want a blueprint.
+		# Adding :<#> to the end of the item implies you want that number of items.
+		# So:
+		#   Typhoon:B:100 Zydrine:10000
+		# Implies that you want a manifest of enough materials for 100 Typhoons and
+		# an additional 10000 Zydrine
+		#
+		# Additionally, this will also work with type IDs, SO:
+		#    644:B:100 39:10000
+		# Will accomplish the same thing.
+		if %extras<drilldown> {
+			getIDs($item<bpID>);
+		} else {
+			%manifest{ $item<typeID> } = {
+				name  => %inv{ $item<typeID> },
+				count => 1,
+			};
+		}
 	}
 
 	# Process existing inventory, if specified.
@@ -580,18 +594,13 @@ sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
 
 	my %cart = getShoppingCart;
 	my $total = 0;
-	my @leftovers = %bp<materials>.grep({ $_[1] > 0 });
+	my @leftovers = %manifest{
+		%manifest.keys.grep({ %manifest{$_}<count> > 0 })
+	};
 
 	if %cart {
-		# cw: This MUST be redone, because the intent is NOT for this to become a
-		#     single item list.
-
-		# cw: My personal nemesis that WILL be squashed on MONDAY
-		#     MOOONDAAAAY!
-		mq(
-			( "Shopping List" ~
-			  ($item.elems == 1 ?? " for item: $item<typeName>" !! '') )
-		);
+		# Yes, MONDAY... I cheated.
+		mq("Shopping List");
 
 		for %cart.keys -> $k {
 			say "$k:";
@@ -632,7 +641,7 @@ sub actualMAIN(:$type_id, :$type_name, :$sqlite, :%extras) {
 	if @leftovers {
 		say "\n\nWARNING! -- Quantity requirements not met for the following items: ";
 		for @leftovers -> $i {
-			say "\t{ %inv{ $i[0] } }: { $i[1] }":
+			say "\t{ $i<name> } }: { $i<count> }":
 		}
 	}
 }
@@ -664,6 +673,6 @@ sub USAGE {
     USAGE
 }
 
-sub MAIN (Str :$type_name, Int :$type_id, Str :$sqlite, *%extras) {
-	actualMAIN(:$type_name, :$type_id, :$sqlite, :%extras);
+sub MAIN (Str :$sqlite, *%extras, *@items) {
+	actualMAIN(:$sqlite, :%extras);
 }
