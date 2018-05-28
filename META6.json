@@ -1,0 +1,27 @@
+{
+  "name" : "WebService-EveOnline",
+  "source-url" : "",
+  "support" : {
+    "source" : null
+  },
+  "perl" : "6.c",
+  "license" : "GPL-3.0",
+  "test-depends" : [
+    "Test::META"
+  ],
+  "provides" : {
+  },
+  "version" : "*",
+  "meta-version" : "0",
+  "authors" : [
+    "clifton.wood@gmail.com"
+  ],
+  "depends" : [
+	  "Inline::Perl5",
+	  "Data::Dumper",
+	  "DBIish",
+	  "DateTime::Parse",
+	  "HTTP::UserAgent"
+  ],
+  "description" : "A market assistance and automation library for Eve Online. Includes support for Eve-Central API, and CCP's XML, CREST and ESI APIs"
+}
