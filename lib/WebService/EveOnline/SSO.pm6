@@ -34,12 +34,12 @@ class WebService::EveOnline::SSO {
 
 	submethod BUILD(:@scopes, :$realm) {
 		$!client = HTTP::UserAgent.new(
-			:max-redirects(5), :useragent<WebService::Eve v0.0.1 (rakudo)>
+			:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
 		);
 
 		$!postclient = HTTP::UserAgent.new(
 			:max-redirects(0),
-			:useragent<WebService::Eve v0.0.1 (rakudo)>
+			:useragent<WebService::EveOnline v0.0.9 (rakudo)>
 		);
 
 		@!scopes = @scopes;
@@ -82,7 +82,7 @@ class WebService::EveOnline::SSO {
 		 	RememberMe		    => 'false',
 			realm				      => %.privateData<realm>
 		};
-		$form_data<realm> = $!realm if $!realm.defined && $!realm.chars;
+		$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
 
 		my $formUrl = @forms[0]<action>;
 		die "\nNo ACTION destionation provided in <FORM> tag."
@@ -138,7 +138,7 @@ class WebService::EveOnline::SSO {
 		# cw: -YYY-
 		#     At this point, if URL has "/Account/LogOn" in it, then we've
 		#     failed the authorization phase and should throw an exception.
-		#say "U: $url";
+		say "U: $url";
 
 		{
 			$response = $!client.get($url);
@@ -288,7 +288,7 @@ class WebService::EveOnline::SSO {
 			[ 'response_type', 	'code' 					          ],
 			[ 'redirect_uri', 	$redir 					          ],
 			[ 'client_id', 		  %!privateData<client_id>  ],
-			[ 'scope', 			    @.scopes.join(',')  	    ],
+			[ 'scope', 			    @.scopes.join(' ')  	    ],
 			[ 'state',  		    ($state = self!getState)  ]
 		]);
 		my $url = "{ PREFIX }/oauth/authorize?{ $p }";

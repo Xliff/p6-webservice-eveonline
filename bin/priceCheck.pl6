@@ -512,10 +512,10 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 	}
 
 	my $asset-api;
-	if %extras<inv> eq <char corp all>.any {
-		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest);
-	} else {
-		die "--inv option must be one of: char, corp or all.";
+	if %extras<inv> {
+		die "--inv option must be one of: char, corp or all."
+			unless %extras<inv> eq <char corp all>.any;
+		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest)
 	}
 
 	# Process slurped options.
@@ -527,14 +527,13 @@ sub actualMAIN(:$type_id, :$type_name, :$item, :$bpname, :$sqlite, :%extras) {
 	## XXX -BEGIN- Resolve various item passing scheme
 	if $type_name {
 		my $item = getEveItem($type_name);
-		fatal("No item found matching '$bpname'.\n") unless $item.defined;
-
+		fatal("No item found matching '$type_name'.\n") unless $item.defined;
 	}
 
   # Get required type ids for BP.
 	getIDs($type_id);
 
-	my $item_name = $bpname;
+	my $item_name = $type_name;
 	unless $item_name.defined {
 		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
 			SELECT typeName
