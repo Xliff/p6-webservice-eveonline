@@ -92,7 +92,9 @@ sub quickLook(:$typeID) {
 	}
 	for %regionName.keys -> $r {
 		say "\t\t...in { %regionName{ $r } } (#{ $r })";
-		my $rawdata = $api.marketRegionOrders($r, :type_id($typeID), :order_type('sell'));
+		my $rawdata = $api.marketRegionOrders(
+			$r, :type_id($typeID.Int), :order_type('sell')
+		);
 
 		#dd $rawdata;
 
@@ -406,21 +408,31 @@ sub commaize($_v) {
 sub openStaticDB($sqlite) {
 	return if $sq_dbh;
 
-	my $sq_file = $sqlite || 'Eve_Static.sqlite3';
+	# Offer some reasonable defaults if nothing specified.
+	my @sq_file = $sqlite ?? ($sqlite) !! <
+		./Eve_Static.sqlite3
+		data/Eve_Static.sqlite3
+		../data/Eve_Static.sqlite3
+	>;
 
-	fatal("ERROR! Static eve data file not found at '$sq_file'!\n")
-		unless $sq_file.IO.e && $sq_file.IO.f;
+	for @sq_file -> $s {
+		#fatal("ERROR! Static eve data file not found at '$sq_file'!\n")
+		#	unless $sq_file.IO.e && $sq_file.IO.f;
 
-	$sq_dbh = DBIish.connect(
-		'SQLite',
-		:database($sq_file),
-		:PrintError(True)
-	)
-	or
-	fatal("Cannot open static Eve data!");
+		$sq_dbh = DBIish.connect(
+			'SQLite',
+			:database($s),
+			:PrintError(True)
+		) if $s.IO.e;
+		if $sq_dbh {
+			say "Using SQLite static file '$s'";
+			last;
+		}
+	}
+	fatal("Cannot open static Eve data!") unless $sq_dbh;
 }
 
-sub getIDs(Int $typeID) {
+sub getIDs(Int $typeID, $m = 1) {
 	my $me = '';
 	$me = "(ME = { %options<me> * 100 }) " if %options<me>.defined;
 	say "Fetching blueprint data {$me}(type_id = {$typeID}) ...";
@@ -436,13 +448,14 @@ sub getIDs(Int $typeID) {
 	for @($sth.allrows) -> $r {
 		# Compute necessary amounts with ME reduction.
 		my $needed = ($r[3] * (1 - (%options<me> // 0))).ceiling;
-		$needed -= %inv{ $r[2] } if %inv{ $r[2] }.defined;
+		# cw: Old code that just happened to not break anything?
+		#$needed -= $r[3] if %inv{ $r[2] }.defined;
 		if $r[1] == 1 {
 			%manifest{ $r[2] } //= {
 				name		=> %inv{ $r[2] },
 				count   => 0,
 			};
-			%manifest{ $r[2]  }<count> += $needed;
+			%manifest{ $r[2]  }<count> += $needed * $m;
 		}
 	}
 	$sth.finish;
@@ -477,7 +490,7 @@ sub getAssets($inv, *%extras) {
 	# cw: How are we going to handle existing assets?
 }
 
-sub actualMAIN(:$sqlite, :%extras, *@items) {
+sub actualMAIN(*@items, :$sqlite, :%extras) {
 	if %extras<beatprice>.defined {
 		die "--beatprice option must be a positive number!"
 			unless 	%extras<beatprice>.Num ~~ Num &&
@@ -485,6 +498,9 @@ sub actualMAIN(:$sqlite, :%extras, *@items) {
 
 		$beatprice = %extras<beatprice>;
 	}
+
+	# Open statid data...
+	openStaticDB($sqlite);
 
 	my $sso;
 	given (%extras<api> // 'esi').lc {
@@ -515,9 +531,6 @@ sub actualMAIN(:$sqlite, :%extras, *@items) {
 	# Process slurped options.
 	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;
 
-	# Open statid data...
-	openStaticDB($sqlite);
-
 	# Preload the entire item id/name database;
 	# May want to rethink this if it takes too long.
 	say "Fetching item data...";
@@ -536,7 +549,14 @@ sub actualMAIN(:$sqlite, :%extras, *@items) {
 
 	# cw: We must now populate the manifest from the listed arguments.
 	for @items -> $i {
-		my $item = getEveItem($i);
+		my @f = $i.split(':');
+		my $count = 1;
+		my $dd = False;
+
+		if @f[* - 1].Int ~~ Int {
+			$count = @f[* - 1];
+		}
+		my $item = getEveItem(@f[0]);
 
 		# If type_name then do:
 		#   1) Get item from database using name.
@@ -555,30 +575,31 @@ sub actualMAIN(:$sqlite, :%extras, *@items) {
 		#   2) Go to type_name, step 2.
 
 		fatal(
-			"No item found matching " ~ {do given $i {
+			"No item found matching {do given $i {
 				when Int { "ID #{$i}" }
 				when Str { "'{$i}'"   }
-			}} ~ "\n"
+			}}\n"
 		) unless $item.defined;
 
-		# Shortcuts for item list:
-	  # Adding :B to the end of the item implies you want a blueprint.
-		# Adding :<#> to the end of the item implies you want that number of items.
-		# So:
-		#   Typhoon:B:100 Zydrine:10000
-		# Implies that you want a manifest of enough materials for 100 Typhoons and
-		# an additional 10000 Zydrine
-		#
-		# Additionally, this will also work with type IDs, SO:
-		#    644:B:100 39:10000
-		# Will accomplish the same thing.
-		if %extras<drilldown> {
-			getIDs($item<bpID>);
+		# cw: Not as elegant as I had originally thought.
+		if @f[1] {
+			if @f[1] eq 'B' {
+				$dd = True;
+			} else {
+				die "Unknown parameter specification '$1'"
+					unless @f[1].Int ~~ Int && @f.elems == 2;
+				$count = @f[1].Int if @f[1].Int ~~ Int;
+			}
+		}
+
+		if $dd || %extras<drilldown> {
+			getIDs($item<bpID>, $count);
 		} else {
-			%manifest{ $item<typeID> } = {
+			%manifest{ $item<typeID> } //= {
 				name  => %inv{ $item<typeID> },
-				count => 1,
+				count => 0,
 			};
+			%manifest{ $item<typeID> }<count> += $count;
 		}
 	}
 
@@ -649,30 +670,50 @@ sub actualMAIN(:$sqlite, :%extras, *@items) {
 use nqp;
 sub USAGE {
 	  # cw: Don't know why the extra spacings are needed. Editor?
-		say nqp::getlexcaller(q|$*USAGE|) ~ q:to/USAGE/;
+		say nqp::getlexcaller(q|$*USAGE|) ~ qq:to/USAGE/;
+\n
+Extras:
 
+  --api         Choose which market API to use. Legitimate values are:
+                              ESI - CCP's ESI
+                              EC  - EveCentral
 
-    Extras:
+  --beatprice   Set the "price to beat", If specified, the program will
+                compare the computed manifest price to this price and
+                will display the difference.
 
-		  --api         Choose which market API to use. Legitimate values are:
-                                  ESI - CCP's ESI
-                                  EC  - EveCentral
+  --drilldown   If this parameter is specified, then any blueprints in the
+                item list will be added to the search manifest.
 
-		  --beatprice   Set the "price to beat", If specified, the program will
-		                compare the computed manifest price to this price and
-		                will display the difference.
+  --inv         Check inventory for necessary items. Legitimate values are:
 
-		  --drilldown   If this parameter is specified, then any blueprints in the
-		                item list will be added to the search manifest.
+      char - Check only your character's inventory
+			corp - Check only your corporation's inventory
+			       (Requires proper corporation access)
+		  all  - Check all inventories that you have access to
 
-      --inv         Check inventory for necessary items. Legitimate values are:
-			                  char - Check only your character's inventory
-												corp - Check only your corporation's inventory
-												       (Requires proper corporation access)
-											  all  - Check all inventories that you have access to
-    USAGE
+	Shortcuts for item list:
+	Adding :B to the end of the item implies you want a blueprint.
+	Adding :<#> to the end of the item implies you want that number of items.
+
+	So:
+	   Typhoon:B:100 Zydrine:10000
+   Implies that you want a manifest of enough materials for 100 Typhoons and
+   an additional 10000 Zydrine
+
+   Additionally, this will also work with type IDs, SO:
+     644:B:100 39:10000
+   Will accomplish the same thing.
+
+   Please note that item names with embedded spaces must be surrounded by
+   quotes.
+USAGE
 }
 
-sub MAIN (Str :$sqlite, *%extras, *@items) {
-	actualMAIN(:$sqlite, :%extras);
+sub MAIN (*@items, Str :$sqlite, *%extras) {
+  if !@items.elems {
+		USAGE;
+		exit;
+	}
+	actualMAIN(@items, :$sqlite, :%extras);
 }
