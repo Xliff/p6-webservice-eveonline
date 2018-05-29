@@ -1,5 +1,6 @@
 use v6.c;
 
+use HTTP::Request;
 use HTTP::UserAgent;
 use JSON::Fast;
 use WebService::EveOnline::Base;
@@ -143,7 +144,31 @@ class WebService::EveOnline::RESTBase {
 		$!request-prefix = $prefix;
 	}
 
-	method post($url, :$datasource, *%extras) {
+	method postBody($url, $content, :$content-type, :$bin = False) {
+		my ($request, $response);
+		my $postclient = HTTP::UserAgent.new(
+			:max_redirects(0),
+			:useragent(self.useragent)
+		);
+
+		$!sso.refreshToken;
+		my %header = $!sso.getHeader;
+		%header<Content-Type> = $content-type // 'application/json';
+		try {
+			$request = HTTP::Request.new(POST => $url, |%header);
+			$request.add-content($content);
+			$response = $postclient.request($request, :$bin);
+			CATCH {
+				when X::HTTP::Response {
+					$response = .response;
+				}
+			}
+		}
+
+		$response;
+	}
+
+	method post($url, *%extras) {
 		my $postclient = HTTP::UserAgent.new(
 			:max_redirects(0),
 			:useragent(self.useragent)

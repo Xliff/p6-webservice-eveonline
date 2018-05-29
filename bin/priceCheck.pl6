@@ -8,9 +8,10 @@ use WebService::EveOnline::EveCentral;
 use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Market;
 use WebService::EveOnline::SSO;
+use WebService::EveOnline::Utils;
 
 my (%inv, %manifest, %assets, %mats, %market, %options);
-my ($sq_dbh, $api, $asset-api, $beatprice);
+my ($api, $asset-api, $beatprice);
 
 enum Filter <
 	NONE
@@ -43,12 +44,6 @@ my %hubs = (
 my @stations = (60005686, 60004588, 60003760);		# Jita.
 #my @stations = (60005686, 60004588);							# NO JITA!
 my @avoidance;
-
-# Print error without backtrace.
-sub fatal($msg) {
-	note($msg);
-	exit;
-}
 
 sub quickLook(:$typeID) {
 	return $api.quicklook(:$typeID) if $api ~~ WebService::EveOnline::EveCentral;
@@ -362,7 +357,7 @@ sub getShoppingCart {
 
 	for %manifest.kv -> $k, $v {
 		my $count := $v<count>;
-		my $minVol= $count / 10;
+		my $minVol= $count / 100;
 		my $idx = 0;
 
 		while ($count > 0 && $idx < %market{$k}<sell>.elems ) {
@@ -403,33 +398,6 @@ sub commaize($_v) {
 	my $s = '';
 	$s = ' ' x ($length - $c.chars) if $length > $c.chars;
 	"$s$c";
-}
-
-sub openStaticDB($sqlite) {
-	return if $sq_dbh;
-
-	# Offer some reasonable defaults if nothing specified.
-	my @sq_file = $sqlite ?? ($sqlite) !! <
-		./Eve_Static.sqlite3
-		data/Eve_Static.sqlite3
-		../data/Eve_Static.sqlite3
-	>;
-
-	for @sq_file -> $s {
-		#fatal("ERROR! Static eve data file not found at '$sq_file'!\n")
-		#	unless $sq_file.IO.e && $sq_file.IO.f;
-
-		$sq_dbh = DBIish.connect(
-			'SQLite',
-			:database($s),
-			:PrintError(True)
-		) if $s.IO.e;
-		if $sq_dbh {
-			say "Using SQLite static file '$s'";
-			last;
-		}
-	}
-	fatal("Cannot open static Eve data!") unless $sq_dbh;
 }
 
 sub getIDs(Int $typeID, $m = 1) {
@@ -500,7 +468,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 	}
 
 	# Open statid data...
-	openStaticDB($sqlite);
+	$sq_dbh = openStaticDB($sqlite);
 
 	my $sso;
 	given (%extras<api> // 'esi').lc {
@@ -623,7 +591,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 		# Yes, MONDAY... I cheated.
 		mq("Shopping List");
 
-		for %cart.keys -> $k {
+		for %cart.keys.sort -> $k {
 			say "$k:";
 			for @(%cart{$k}) -> $o {
 				# cw: A better way than writing this out as a string.
@@ -662,7 +630,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 	if @leftovers {
 		say "\n\nWARNING! -- Quantity requirements not met for the following items: ";
 		for @leftovers -> $i {
-			say "\t{ $i<name> } }: { $i<count> }":
+			say "\t{ $i<name> }: { $i<count> }":
 		}
 	}
 }

@@ -1,9 +1,12 @@
 use v6.c;
 
 use DateTime::Parse;
+use DBIish;
 use HTTP::UserAgent;
 use HTTP::Cookie;
 use JSON::Fast;
+
+our $sq_dbh is export;
 
 grammar Cookie_Grammar {
     regex TOP {
@@ -88,4 +91,40 @@ sub makeRequestStatic($url) is export {
 		unless $response ~~ HTTP::Response && $response.is-success;
 
 	from-json($response.content);
+}
+
+# Print error without backtrace.
+sub fatal($msg) is export {
+	note($msg);
+	exit;
+}
+
+sub openStaticDB($sqlite) is export {
+	return if $sq_dbh;
+
+	# Offer some reasonable defaults if nothing specified.
+	my @sq_file = $sqlite ?? ($sqlite) !! <
+		./Eve_Static.sqlite3
+		data/Eve_Static.sqlite3
+		../data/Eve_Static.sqlite3
+	>;
+
+	for @sq_file -> $s {
+		#fatal("ERROR! Static eve data file not found at '$sq_file'!\n")
+		#	unless $sq_file.IO.e && $sq_file.IO.f;
+
+		$sq_dbh = DBIish.connect(
+			'SQLite',
+			:database($s),
+			:PrintError(True)
+		) if $s.IO.e;
+
+		if $sq_dbh {
+			say "Using SQLite static file '$s'";
+			last;
+		}
+	}
+	fatal("Cannot open static Eve data!") unless $sq_dbh;
+
+  $sq_dbh;
 }

@@ -97,6 +97,10 @@ class WebService::EveOnline::Base {
 		);
 	}
 
+	method useragent {
+		$!http_client.useragent;
+	}
+
 	method writeResponse(Str $r, Int $ttd) {
 		# cw: Test to insure all directories between root and $!response_file
 		#     exist.

@@ -1,6 +1,6 @@
 use v6.c;
 
-use HTTP::UserAgent;
+use HTTP::Request;
 
 use WebService::EveOnline::Base;
 use WebService::EveOnline::RESTBase;
@@ -10,14 +10,9 @@ class WebService::EveOnline::ESI::Base {
 	also is WebService::EveOnline::RESTBase;
 
   has $!type;
-	has $!postclient;
 
   submethod BUILD(:$type) {
     $!type = $type;
-		$!postclient = HTTP::UserAgent.new(
-			:max-redirects(0),
-			:useragent(self.http_client.user_agent)
-		);
   }
 
   multi method new($sso, $type, :$useragent) {
@@ -36,8 +31,10 @@ class WebService::EveOnline::ESI::Base {
   }
 
   multi method new($sso, :$latest, :$legacy, :$dev, :$useragent) {
-    die "Must specify server type as one of :legacy, :latest or :dev"
-      unless [^^]($latest, $legacy, $dev);
+		if ($latest, $legacy, $dev).any {
+    	die "Must specify server type as one of :legacy, :latest or :dev"
+      	unless [^^]($latest, $legacy, $dev);
+		}
 
     my $type = do {
       when $latest { "latest"; }
@@ -53,16 +50,11 @@ class WebService::EveOnline::ESI::Base {
 		$!type;
 	}
 
-  method requestByPrefix(
-		$prefix,
-		:$datasource,
-		:$method = RequestMethod::GET,
-		*%args
-	) {
+	method !buildUrl ($prefix, :$datasource, :%args) {
 		my $url = "{ $.request-prefix }{ $prefix }";
 		my $nf = 0;
 
-		$url ~= '/' unless $url.substr([*-1]) eq '/';
+		$url ~= '/' unless $url.substr(* - 1) eq '/';
 
 		if $datasource.defined {
 			# cw: It would be better if this were not a set of literals, but we
@@ -77,14 +69,34 @@ class WebService::EveOnline::ESI::Base {
 			$nf = 1 unless $nf;
 		}
 
+		#say "U: $url";
+
+		$url;
+	}
+
+	method postBodyByPrefix($prefix, $content, :$datasource, *%args) {
+		my $url = self!buildUrl($prefix, :$datasource, :%args);
+
+		self.postBody($url, $content);
+	}
+
+  method requestByPrefix(
+		$prefix,
+		:$datasource,
+		:$method = RequestMethod::GET,
+		:%args
+	) {
+		my $url = self!buildUrl($prefix, :$datasource, :%args);
+
 		#say "ESI-U [{$method}]: $url";
+
 		do given $method {
 			when RequestMethod::GET {
 		    self.makeRequest($url, :$method);
 			}
 
 			when RequestMethod::POST {
-				$!postclient.post($url, %args<DATA>);
+				#HTTP::Request.new(POST => $url, |%header);
 			}
 		}
   }

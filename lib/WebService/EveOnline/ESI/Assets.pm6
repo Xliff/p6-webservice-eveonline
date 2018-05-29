@@ -8,49 +8,63 @@ use WebService::EveOnline::ESI::Corporation;
 class WebService::EveOnline::ESI::Assets {
 	also is WebService::EveOnline::ESI::Base;
 
-	has $!character;
-	has $!corporation;
+	has $!char-api;
+	has $!corp-api;
+	has $!sso;
+	has $.corpID;
 
 	submethod BUILD(:$sso) {
-		$!character = WebService::EveOnline::ESI::Character.new($sso);
-		$!corporation = WebService::EveOnline::ESI::Corporation.new($sso);
+		$!char-api = WebService::EveOnline::ESI::Character.new($sso);
+		$!corp-api = WebService::EveOnline::ESI::Corporation.new($sso);
+		$!sso = $sso;
+
+		my $char = $!char-api.getCharacter();
+		$!corpID = $char.corporationID;
 	}
 
 	method new($sso) {
 		self.bless($sso);
 	}
 
-  method getCharacterAssets ($corporationID, :$datasource) {
-		$!character.getCharacterAssets($corporationID, :$datasource);
+	method charID {
+		$!sso.characterID;
 	}
 
-	method getCorporationAssets ($corporationID, :$datasource) {
-		$!corporation.getCorporationsAssets($corporationID, :$datasource);
+	method corpID {
+		$!corpID;
 	}
 
-	method getCharacterAssetLocations ($characterID, @item_ids, :$datasource) {
-		$!character.getCorporateAseetLocations(
+  method getCharacterAssets ($characterID?, :$datasource) {
+		$!char-api.getCharacterAssets($characterID, :$datasource);
+	}
+
+	method getCorporationAssets ($corporationID?, :$datasource) {
+		my $cid = $corporationID // $!corpID;
+		$!corp-api.getCorporationsAssets($cid, :$datasource);
+	}
+
+	method getCharacterAssetLocations (@item_ids, $characterID?, :$datasource) {
+		$!char-api.getCorporateAseetLocations(
 			$characterID, @item_ids, :$datasource
 		);
 	}
 
-  method getCorporationAssetLocations ($corporationID, @item_ids, :$datasource) {
-		$!corporation.getCorporateAseetLocations(
+  method getCorporationAssetLocations (@item_ids, $corporationID?, :$datasource) {
+		$!corp-api.getCorporateAseetLocations(
 			$corporationID, @item_ids, :$datasource
 		);
 	}
 
-	method getCharacterAssetNames($characterID, @item_ids, :$datasource) {
-		$!character.getCharacterAssetNames(
+	method getCharacterAssetNames(@item_ids, $characterID?, :$datasource) {
+		$!char-api.getCharacterAssetNames(
 			$characterID, @item_ids, :$datasource
 		);
 	}
 
-	method getCorporationAssetNames($characterID, @item_ids, :$datasource) {
-		$!character.getCorporationAssetNames(
-			$characterID, @item_ids, :$datasource
+	method getCorporationAssetNames(@item_ids, $corporationID?, :$datasource) {
+		$!char-api.getCorporationAssetNames(
+			$corporationID, @item_ids, :$datasource
 		);
 	}
-
 
 }

@@ -30,7 +30,7 @@ class WebService::EveOnline::SSO {
 
 	# Store the Character ID selected so that consumers can query for it,
 	# later.
-	has $.characterId;
+	has $.characterID;
 
 	submethod BUILD(:@scopes, :$realm) {
 		$!client = HTTP::UserAgent.new(
@@ -212,7 +212,7 @@ class WebService::EveOnline::SSO {
 		}
 
 		my $form_data;
-		$!characterId = $form_data<CharacterId> = $cid;
+		$!characterID = $form_data<CharacterId> = $cid;
 		$form_data<action> = 'Authorize';
 		for @( $!xmldoc.elements(
 			:TAG<input>, :type<hidden>, :RECURSE(100)
@@ -370,7 +370,7 @@ class WebService::EveOnline::SSO {
 
 		# cw: Maybe add code to output response if a flag is set?
 		die "Invalid response content-type."
-			unless $response.fields('Content-Type')  eq 'application/json';
+			unless $response.field('Content-Type') ~~ /^ 'application/json' /;
 
 		my $jsonObj = from-json($response.content);
 		self!setTokenData($jsonObj);
