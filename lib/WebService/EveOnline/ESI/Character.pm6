@@ -9,7 +9,54 @@ class WebService::EveOnline::ESI::Character {
     self.appendPrefix("/{ self.type }/characters/");
   }
 
-	method getCaracterAffiliation(@characterIDs, :$datasource) {
+	method getCharacterAssets ($characterID, :$datasource) {
+    self.checkScope('esi-assets.read_assets.v1');
+    die "<characterID> must be an integer"
+      unless $corporationID ~~ Int;
+
+    self.requestByPrefix("{$characterID}/assets/", :$datasource);
+  }
+
+  method getCharacterAssetLocations ($characterID, @item_ids, :$datasource) {
+    self.checkScope('esi-assets.read_assets.v1');
+    die "<characterID> must be an integer"
+      unless $corporationID ~~ Int;
+
+    die "<item_ids> must be a list of integers"
+      unless @item_ids.all() ~~ Int;
+
+    my %extras = (
+      DATA => {
+        item_ids => @item_ids.join(','),
+      }
+    );
+
+    self.requestByPrefix(
+      "{$corporationID}/assets/locations/", :$datasource,
+      :method(RequestMethod::POST),
+      |%extras
+    );
+  }
+
+  method getCharacterAssetNames($characterID, @item_ids, :$datasource) {
+    self.checkScope('esi-assets.read_assets.v1');
+    die "<characterID> must be an integer"
+      unless $corporationID ~~ Int;
+
+    my %extras = (
+      DATA => {
+        item_ids => @item_ids.join(','),
+      }
+    );
+
+    self.requestByPrefix(
+      "{$characterID}/assets/names/", :$datasource,
+      :method(RequestMethod::POST),
+      |%extras
+    );
+  }
+
+	method getCharacterAffiliation(@characterIDs, :$datasource) {
 		die "<characterIDs> must be a list of integers"
 			unless @characterIDs.all() ~~ Int;
 

@@ -20,12 +20,37 @@ class WebService::EveOnline::ESI::Assets {
 		self.bless($sso);
 	}
 
-  method getChracterAssets($type_ids) {
-		$!character.getAssets($type_ids);
+  method getCharacterAssets ($corporationID, :$datasource) {
+		$!character.getCharacterAssets($corporationID, :$datasource);
 	}
 
-	method getCorporationAssets($type_ids) {
-		$!corporation.getAssets($type_ids);
+	method getCorporationAssets ($corporationID, :$datasource) {
+		$!corporation.getCorporationsAssets($corporationID, :$datasource);
 	}
+
+	method getCharacterAssetLocations ($characterID, @item_ids, :$datasource) {
+		$!character.getCorporateAseetLocations(
+			$characterID, @item_ids, :$datasource
+		);
+	}
+
+  method getCorporationAssetLocations ($corporationID, @item_ids, :$datasource) {
+		$!corporation.getCorporateAseetLocations(
+			$corporationID, @item_ids, :$datasource
+		);
+	}
+
+	method getCharacterAssetNames($characterID, @item_ids, :$datasource) {
+		$!character.getCharacterAssetNames(
+			$characterID, @item_ids, :$datasource
+		);
+	}
+
+	method getCorporationAssetNames($characterID, @item_ids, :$datasource) {
+		$!character.getCorporationAssetNames(
+			$characterID, @item_ids, :$datasource
+		);
+	}
+
 
 }
