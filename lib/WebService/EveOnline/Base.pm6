@@ -231,7 +231,7 @@ class WebService::EveOnline::Base {
 	multi method makeRequest(
 		$url,
 		:$method = GET,
-		:$header,
+		:$headers,
 		:$form,
 		:$cache_ttl = $!cache_ttl,
 		:$cache_key = $!cache_key,
@@ -243,8 +243,10 @@ class WebService::EveOnline::Base {
 		die "Invalid value '$method' used for method."
 			unless $method ~~ RequestMethod;
 
-		die "Header value should be a Hash, not { $header.WHAT }."
-			unless !$header.defined || $header ~~ Hash;
+		die "Headers are undefined." unless $headers.defined;
+
+		die "Header value should be a Hash, not { $headers.WHAT }."
+			unless $headers ~~ Hash;
 
 		my $cf;
 		if (
@@ -274,19 +276,19 @@ class WebService::EveOnline::Base {
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
 		$response = do given $method {
 			when RequestMethod::GET {
-				$!http_client.get($url, :header(%( $header )));
+				$!http_client.get($url, :header($headers));
 			}
 
 			when RequestMethod::POST {
-				$!http_client.post($url, :form(%( $form )), :header(%( $header )));
+				$!http_client.post($url, :form($form), :header($headers));
 			}
 
 			when RequestMethod::DELETE {
-				$!http_client.delete($url, :header(%( $header )));
+				$!http_client.delete($url, :header($headers));
 			}
 
 			when RequestMethod::PUT {
-				$!http_client.put($url, :form(%( $form )), :header(%( $header )));
+				$!http_client.put($url, :form($form), :header($headers));
 			}
 		};
 

@@ -54,7 +54,7 @@ class WebService::EveOnline::ESI::Base {
 		my $url = "{ $.request-prefix }{ $prefix }";
 		my $nf = 0;
 
-		$url ~= '/' unless $url.substr(* - 1) eq '/';
+		#$url ~= '/' unless $url.substr(* - 1) eq '/';
 
 		if $datasource.defined {
 			# cw: It would be better if this were not a set of literals, but we
@@ -88,7 +88,7 @@ class WebService::EveOnline::ESI::Base {
 	) {
 		my $url = self!buildUrl($prefix, :$datasource, :%args);
 
-		#say "ESI-U [{$method}]: $url";
+		say "ESI-U [{$method}]: $url";
 
 		do given $method {
 			when RequestMethod::GET {

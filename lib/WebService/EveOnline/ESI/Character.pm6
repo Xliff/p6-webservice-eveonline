@@ -11,16 +11,41 @@ class WebService::EveOnline::ESI::Character {
     self.appendPrefix("/{ self.type }/characters/");
   }
 
-	method getCharacterAssets ($characterID?, :$datasource) {
-		my $cid = self.sso.characterID;
+	method getAllCharacterAssets($characterID?, :$datasource) {
+		my $firstPage = self.getCharacterAssets;
 
-		$cid.say;
+		my $topPage = $firstPage<__cache__><pages>;
+		my $assetList = $firstPage<data>;
+		my $url = $firstPage<__cache__><url>;
+
+		for 2..$topPage -> $p {
+			my $a = 2500;
+			sleep ($a + (^$a / 2).pick) / 1000;
+			my $curURL = "$url?token={self.sso.tokenData<access_token>}\&page={$p}";
+			my $cmd = "curl -s '$curURL'";
+			say "C{$p}: {$cmd}";
+			my $json = qqx{$cmd};
+			# cw: Also write $json out to a file.
+$json.say;
+			#
+			my $o = from-json($json);
+			$assetList.push: $o;
+		}
+
+		$assetList;
+	}
+
+	method getCharacterAssets ($characterID?, Int :$page, :$datasource) {
+		my $cid = self.sso.characterID;
 
     self.checkScope('esi-assets.read_assets.v1');
     die "<characterID> must be an integer"
-      unless $cid ~~ Int;
+      unless $cid.Int ~~ Int;
 
-    self.requestByPrefix("{$cid}/assets/", :$datasource);
+		my $url = "{$cid}/assets/?token=" ~ self.sso.tokenData<access_token>;
+		$url ~= "&page={$page}" if $page;
+
+    self.requestByPrefix($url, :$datasource);
   }
 
   method getCharacterAssetLocations (@item_ids, :$datasource) {
@@ -41,7 +66,7 @@ class WebService::EveOnline::ESI::Character {
 		my $cid = $characterID // self.sso.characterID;
     self.checkScope('esi-assets.read_assets.v1');
     die "<characterID> must be an integer"
-      unless $cid ~~ Int;
+      unless $cid.Int ~~ Int;
 
 			self.postBodyByPrefix(
 				"{$cid}/assets/names/", to-json(@item_ids), :$datasource
@@ -71,7 +96,7 @@ class WebService::EveOnline::ESI::Character {
 	method getCharacter($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
-			unless $characterID ~~ Int;
+			unless $cid.Int ~~ Int;
 
 		self.requestByPrefix($cid, :$datasource);
 	}

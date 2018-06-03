@@ -15,8 +15,10 @@ class WebService::EveOnline::RESTBase {
 
 	constant PREFIX = {
 		tq		=> 'https://crest-tq.eveonline.com',
-		sisi	=> 'https://crest-sisi.eveonline.com',
-		esi   => 'https://esi.tech.ccp.is'
+		#sisi	=> 'https://crest-sisi.eveonline.com',
+		dev   => 'https://esi-dev.tech.ccp.is',
+		#esi   => 'https://esi.tech.ccp.is'
+		esi		=> 'https://esi.evetech.net',
 	};
 
 	submethod BUILD(
@@ -48,7 +50,11 @@ class WebService::EveOnline::RESTBase {
 			}
 
 			when 'sisi' | 'singularity' | 'sing' | 's' {
-				'sisi'
+				'dev'
+			}
+
+			when 'dev' {
+				'dev';
 			}
 
 			when 'esi' | 'e' {
@@ -100,31 +106,64 @@ class WebService::EveOnline::RESTBase {
 		$.sso.refreshToken if $.sso.defined && DateTime.now > $.sso.expires;
 
 		my $retVal;
+		my $page = 1;
+		my $curURL = $url;
 		loop {
 			my $data;
 
+			my $newHeaders = $.sso.getHeader;
+			$newHeaders.append($headers.pairs);
+
 			$data = callwith(
-				$data<next><href> // $data<next> // $url,
+				$curURL,
 				:$method,
-				:header($.sso.getHeader.append($headers.pairs)),
+				:headers($newHeaders),
 				:$cache_ttl,
 				:$force,
 				:json
 			);
 
+			say "U{$page}: $curURL";
+
 			# cw: Do we limit paged data? If so, how?
-			if !$retVal.defined {
-				$retVal = $data;
-			} else {
-				if $data<next>.defined && $data<items>.defined {
-					$retVal<items>.push($data<items>);
+			$retVal //= $data;
+
+			# This will no longer work due to the switch from CREST to ESI
+			#if $data<next>.defined && $data<items>.defined {
+			#	$retVal<items>.push($data<items>);
+			#}
+
+			# Eve STAGGER interface - Requires pagination and not a simple call
+			# dependent on values within the response. The loop will need to be
+			# rethought.
+			#
+
+			given self.last-response {
+				when HTTP::Response {
+					#say "LAST: {$_.is-success} / {$_.code}";
+					my @maxPageVals = $_.field('X-Pages').values;
+					my $maxPage;
+					if @maxPageVals.elems == 1 {
+						$data<__cache__><pages> = $maxPage = @maxPageVals[0];
+						$data<__cache__><url> = $curURL;
+						$curURL = Nil;
+					} elsif @maxPageVals.elems > 1 {
+						say "X-Pages values: " ~ @maxPageVals.gist;
+						die "WTF?! X-Pages is not supposed to have more than one value!";
+					}
+
+					#if $page < $maxPage.Int {
+						# This is dumb.
+					#	$retVal<data>.push: $data<data>;
+					#	$page++;
+					#	$curURL = $url ~ "\&page={$page}";
+					#}
 				}
 			}
-			last unless $data && $data<next>.defined;
+
+			last if !$curURL;
 		}
-		# cw: If paged, do we need items related to paging?
-		# $retVal.delete('pageCount');
-		# $retVal.delete('pageCount_str');
+
 		$retVal;
 	}
 
@@ -150,6 +189,8 @@ class WebService::EveOnline::RESTBase {
 			:max_redirects(0),
 			:useragent(self.useragent)
 		);
+
+		#say "ESI-P: $url";
 
 		$!sso.refreshToken;
 		my %header = $!sso.getHeader;
