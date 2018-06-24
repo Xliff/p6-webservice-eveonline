@@ -35,14 +35,11 @@ $json.say;
 		$assetList;
 	}
 
-	method getCharacterAssets ($characterID?, Int :$page, :$datasource) {
-		my $cid = self.sso.characterID;
-
+	method getCharacterAssets (Int :$page, :$datasource) {
     self.checkScope('esi-assets.read_assets.v1');
-    die "<characterID> must be an integer"
-      unless $cid.Int ~~ Int;
 
-		my $url = "{$cid}/assets/?token=" ~ self.sso.tokenData<access_token>;
+		# This may not be necessary after the move to CRO::Http
+		my $url = "{ self.sso.characterID }/assets/?token=" ~ self.sso.tokenData<access_token>;
 		$url ~= "&page={$page}" if $page;
 
     self.requestByPrefix($url, :$datasource);
@@ -51,8 +48,6 @@ $json.say;
   method getCharacterAssetLocations (@item_ids, :$datasource) {
 		my $cid = self.sso.characterID;
     self.checkScope('esi-assets.read_assets.v1');
-    die "<characterID> must be an integer"
-      unless $cid.Int ~~ Int;
 
     die "<item_ids> must be a list of integers"
       unless @item_ids.all() ~~ Int;
@@ -62,15 +57,13 @@ $json.say;
 		);
   }
 
-  method getCharacterAssetNames(@item_ids, $characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
+  method getCharacterAssetNames(@item_ids, :$datasource) {
     self.checkScope('esi-assets.read_assets.v1');
-    die "<characterID> must be an integer"
-      unless $cid.Int ~~ Int;
-
-			self.postBodyByPrefix(
-				"{$cid}/assets/names/", to-json(@item_ids), :$datasource
-			);
+		self.postBodyByPrefix(
+			"{ self.sso.charachterID }/assets/names/",
+			to-json(@item_ids),
+			:$datasource
+		);
   }
 
 	method getCharacterAffiliation(@characters, :$datasource) {
@@ -101,22 +94,29 @@ $json.say;
 		self.requestByPrefix($cid, :$datasource);
 	}
 
-	method getCharacterAgents($characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
+	method getCharacterAgents(:$datasource) {
 		self.checkScope('esi-characters.read_agents_research.v1');
-		die "<characterID> must be an integer"
-			unless $characterID ~~ Int;
-
-		self.requestByPrefix("{$cid}/agents_research/", :$datasource);
+		self.requestByPrefix("{ self.sso.characterID }/agents_research/", :$datasource);
 	}
 
-	method getCharacterBlueprints($characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
-		self.checkScope('esi-characters.read_blueprints.v1');
-		die "<characterID> must be an integer"
-			unless $characterID ~~ Int;
+	method getBookmarks(:$datasource) {
+		self.checkScope('esi-bookmarks.read_character_bookmarks.v1');
+		self.requestByPrefix("{ self.sso.characterID }/bookmarks/", $datasource);
+	}
 
-		self.requestByPrefix("{$cid}/blueprints/", :$datasource);
+	method getBookmarkFolders(:$datasource) {
+		self.checkScope('esi-bookmarks.read_character_bookmarks.v1');
+		self.requestByPrefix("{ self.sso.characterID }/bookmarks/folders/", :$datasource);
+	}
+
+	method getCharacterBlueprints(:$datasource) {
+		self.checkScope('esi-characters.read_blueprints.v1');
+		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource);
+	}
+
+	method getClones(:$datasource) {
+		self.checkScope('esi-clones.read_clones.v1');
+		self.requesdtByPrefix("{ self.sso.characterID }/clones/", $datasource);
 	}
 
 	method getChracterCorporationHistory($characterID?, :$datasource) {
@@ -145,6 +145,11 @@ $json.say;
 			unless $characterID ~~ Int;
 
 		self.requestByPrefix("{$cid}/fatigue/", :$datasource);
+	}
+
+	method getImplants(:$datasource) {
+		self.checkScope('esi-clones.read_implants.v1');
+		self.requesdtByPrefix("{ self.sso.characterID }/implants/");
 	}
 
 	method getCharacterMedals($characterID?, :$datasource) {
