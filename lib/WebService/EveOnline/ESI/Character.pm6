@@ -114,6 +114,44 @@ $json.say;
 		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource);
 	}
 
+	method getCalendarEvents(:$datasource) {
+		self.checkScope('esi-calendar.read_calendar_events.v1');
+		self.requestByPrefix("{ self.sso.characterID }/calendar/");
+	}
+
+	method getCalendarEvent($eventid, :$datasource) {
+		die "<eventID> must be an integer" unless $eventid ~~ Int;
+
+		self.checkScope('esi-calendar.read_calendar_events.v1');
+		self.requestByPrefix("{ self.sso.characterID }/calendar/{ $eventid }/");
+	}
+
+	method putCalendarEvent($eveentid, $response, :$datasource) {
+		die "<eventID> must be an integer" unless $eventid ~~ Int;
+		die "response> must be one of 'accepted', 'declined' or 'tentative'"
+			unless $response eq <accepted declined tentative>.all();
+
+		my $extras = (
+			DATA => {
+				response => $response,
+			}
+		);
+
+		self.checkScope('esi-calendar.respond_calendar_events.v1');
+		self.requestByPrefix(
+			"{ self.sso.characterID }/calendar/{ $eventid }/",
+			:method(RequestMethod::PUT),
+			|%extras
+		);
+	}
+
+	method getCaldarEventAttendees($eventid, :$datasource) {
+		die "<eventID> must be an integer" unless $eventid ~~ Int;
+
+		self.checkScope('esi-calendar.read_calendar_events.v1');
+		self.requestByPrefix("{ self.sso.characterID }/calendar/{ $eventid }/attendees/");
+	}
+
 	method getClones(:$datasource) {
 		self.checkScope('esi-clones.read_clones.v1');
 		self.requesdtByPrefix("{ self.sso.characterID }/clones/", $datasource);

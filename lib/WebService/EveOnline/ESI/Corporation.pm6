@@ -21,7 +21,7 @@ class WebService::EveOnline::ESI::Corporation {
   method !getCorpParam($cid?) {
     my $cid = $corpId // $.corporationID;
 
-    die "<characterID> must be an integer"
+    die "<corporationID> must be an integer"
       unless $cid.Int ~~ Int;
 
     $cid;
