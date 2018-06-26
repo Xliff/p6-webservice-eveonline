@@ -143,6 +143,16 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $.corporationID }/industry/jobs/", :$datasource);
   }
 
+  method getMarketOrders(:$datasource) {
+    self.checkScope('esi-markets.read_corporation_orders.v1');
+    self.requestByPrefix("{ $.corporationID }/orders/", :$datasource);
+  }
+
+  method getMarketOrderHistory(:$datasource) {
+    self.checkScope('esi-markets.read_corporation_orders.v1');
+    self.requestByPrefix("{ $.corporationID }/orders/history/", :$datasource);
+  }
+
   method getMedals(:$datasource) {
     self.checkScope('esi-corporations.read_medals.v1');
     self.requestByPrefix("{ $.corporationID }/medals/", :$datasource);

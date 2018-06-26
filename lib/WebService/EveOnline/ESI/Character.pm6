@@ -40,13 +40,13 @@ class WebService::EveOnline::ESI::Character {
 		ship_type_id: The type_id associated with the ship this fitting is for. [Int]
 DIE
 			unless
-				(%fitting<description> && %fitting<description> ~~ Str)
+				( %fitting<description> && %fitting<description> ~~ Str )
 				||
-				(%fitting<items> && % %fitting<items> ~~ Array && %fitting<items>.all ~~ Hash)
+				( %fitting<items> && % %fitting<items> ~~ Array && %fitting<items>.all ~~ Hash )
 				||
-				(%fitting<name> && %fitting<name> ~~ Str)
+				( %fitting<name> && %fitting<name> ~~ Str )
 				||
-				(%fitting<ship_type_id> && %fitting<ship_type_id> ~~ Int);
+				( %fitting<ship_type_id> && %fitting<ship_type_id> ~~ Int );
 
 		self.postBodyByPrefix(
 			"{ self.sso.characterID }/fittings/",
@@ -328,6 +328,16 @@ DIE
 	method getLoyaltyPoints(:$datasource) {
 		self.checkScope('esi-characters.read_loyalty.v1');
 		self.requestByPrefix("{ self.sso.characterID }/loyalty/points/", :$datasource);
+	}
+
+	method getMarketOrders(:$datasource) {
+		self.checkScope('esi-markets.read_character_orders.v1');
+		self.requestByPrefix("{ self.sso.characterID }/orders/", :$datasource);
+	}
+
+	method getMarketOrderHistory(:$datasource) {
+		self.checkScope('esi-markets.read_character_orders.v1');
+		self.requestByPrefix("{ self.sso.characterID }/orders/history/", :$datasource);
 	}
 
 	method getMedals(:$datasource) {
