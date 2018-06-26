@@ -125,12 +125,17 @@ class WebService::EveOnline::ESI::Corporation {
 
   method getFacilities(:$datasource) {
     self.checkScope('esi-corporations.read_facilities.v1');
-    self.requestByPrefix("{ $.corporationID }/facilities/", $datasource);
+    self.requestByPrefix("{ $.corporationID }/facilities/", :$datasource);
   }
 
   method getIcon($corpId?, :$datasource) {
     my $cid = self!getCorpId($corpId);
     self.requestByPrefix("{ $cid }/icons/", :$datasousrce);
+  }
+
+  method getIndustryJobs(:$datasource) {
+    self.checkScope('esi-industry.read_corporation_jobs.v1');
+    self.requestByPrefix("{ $.corporationID }/industry/jobs/", :$datasource);
   }
 
   method getMedals(:$datasource) {
@@ -141,6 +146,23 @@ class WebService::EveOnline::ESI::Corporation {
   method getMedalsIssued(:$datasource) {
     self.checkScope('esi-corporations.read_medals.v1');
     self.requestByPrefix("{ $.corporationID }/medals/issued/", :$datasource);
+  }
+
+  method getMiningExtractions(:$datasource) {
+    self.checkScope('esi-industry.read_corporation_mining.v1');
+    self.requestByPrefix("{ $.corporationID }/mining/extractions/", :$datasource);
+  }
+
+  method getMiningObservers(:$datasource) {
+    self.checkScope('esi-industry.read_corporation_mining.v1');
+    self.requestByPrefix("{ $.corporationID }/mining/observers/", :$datasource);
+  }
+
+  method getMiningObserver($oid, :$datasource) {
+    die "<observerID> must be an Integer." unless $oid ~~ Int;
+
+    self.checkScope('esi-industry.read_corporation_mining.v1');
+    self.requestByPrefix("{ $.corporationID }/mining/observers/{ $oid }", :$datasource);
   }
 
   method getMembers(:$datasource) {

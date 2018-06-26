@@ -11,6 +11,10 @@ class WebService::EveOnline::ESI::Character {
     self.appendPrefix("/{ self.type }/characters/");
   }
 
+	method character-id {
+		self.sso.characterID;
+	}
+
 	method addContacts(@contacts, :$datasource) {
 		die "<contacts> must be a list of Integers"
 			unless @contact_ids.map( *.Int ).all() ~~ Int;
@@ -177,7 +181,7 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/bookmarks/folders/", :$datasource);
 	}
 
-	method getCharacterBlueprints(:$datasource) {
+	method getBlueprints(:$datasource) {
 		self.checkScope('esi-characters.read_blueprints.v1');
 		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource);
 	}
@@ -311,9 +315,19 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/implants/", $datasource);
 	}
 
+	method getIndustryJobs(:$datasource) {
+		self.checkScope('esi-industry.read_character_jobs.v1');
+		self.requestByPrefix("{ self.sso.characterID }/industry/jobs/", $datasource);
+	}
+
 	method getMedals(:$datasource) {
 		self.checkScope('esi-characters.read_medals.v1');
 		self.requestByPrefix("{ self.sso.characterID }/medals/", :$datasource);
+	}
+
+	method getMining(:$datasource) {
+		self.checkScope('esi-industry.read_character_mining.v1');
+		self.requestByPrefix("{ self.sso.characterID }/mining/", :$datasource);
 	}
 
 	method getNames(@characterIDs, :$datasource) {

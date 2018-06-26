@@ -13,17 +13,18 @@ class WebService::EveOnline::ESI::Assets {
 	has $!sso;
 	has $.corpID;
 
-	submethod BUILD(:$sso) {
-		$!char-api = WebService::EveOnline::ESI::Character.new($sso);
-		$!corp-api = WebService::EveOnline::ESI::Corporation.new($sso);
-		$!sso = $sso;
+	submethod BUILD {
+		$!char-api = WebService::EveOnline::ESI::Character.new(self.sso);
+		$!corp-api = WebService::EveOnline::ESI::Corporation.new(self.sso);
 
 		my $char = $!char-api.getCharacter();
 		$!corpID = $char.corporationID;
 	}
 
 	method new($sso) {
-		self.bless($sso);
+		die "A valid SSO object passed as a parameter to new() is required."
+			unless $sso.defined && $sso ~~ WebService::EveOnline::SSO;
+		self.bless(:$sso);
 	}
 
 	method charID {
