@@ -6,10 +6,10 @@ class WebService::EveOnline::ESI::Insurance {
 	also is WebService::EveOnline::ESI::Base;
 
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/insurance/");
+		self.appendPrefix("/{ self.type }/insurance/");
 	}
 
-	method getPrices(:$language, :$datasource) {
+	method getPrices(:$datasource) {
 		self.requestByPrefix('prices', :$datasource);
 	}
 

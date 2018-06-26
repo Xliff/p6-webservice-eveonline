@@ -52,6 +52,10 @@ class WebService::EveOnline::SSO {
 		self.bless(:@scopes, :$realm);
 	}
 
+	method characterID {
+		$.tokenData.defined ?? $.tokenData<characterID> !! Nil;
+	}
+
 	method !encodeAuth {
 		encode-base64(
 			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str

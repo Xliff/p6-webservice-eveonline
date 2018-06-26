@@ -320,6 +320,11 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/industry/jobs/", $datasource);
 	}
 
+	method getRecentKillmails(:$datasource) {
+		self.checkScope('esi-killmails.read_killmails.v1');
+		self.requestByPrefix("{ self.sso.characterID }/killmails/recent/", $datasource);
+	}
+
 	method getMedals(:$datasource) {
 		self.checkScope('esi-characters.read_medals.v1');
 		self.requestByPrefix("{ self.sso.characterID }/medals/", :$datasource);

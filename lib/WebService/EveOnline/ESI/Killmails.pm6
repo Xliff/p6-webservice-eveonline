@@ -5,8 +5,25 @@ use WebService::EveOnline::ESI::Base;
 class WebService::EveOnline::ESI::Insurance {
 	also is WebService::EveOnline::ESI::Base;
 
+	submethod BUILD {
+		$!char-api = WebService::EveOnline::ESI::Character.new(self.sso);
+		$!corp-api = WebService::EveOnline::ESI::Corporation.new(self.sso);
+	}
+
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/killmails/");
+		self.appendPrefix("/{ self.type }/killmails/");
+	}
+
+	method new(:$sso) {
+		self.bless(:$sso);
+	}
+
+	method character-id {
+		self.sso.characterID;
+	}
+
+	method corporation-id {
+		$!corp-api.corporation-id;
 	}
 
 	method get($id, $hash, :$datasource) {
@@ -14,12 +31,21 @@ class WebService::EveOnline::ESI::Insurance {
 	}
 
 	method getKillMail($id, $hash, :$datasource) {
-		self.requestByPrefix("{ $id }/{ $hash }", :$datasource, :$language);
+		self.requestByPrefix("{ $id }/{ $hash }/", :$datasource, :$language);
 	}
 
-	# method getCorpMails - Alias to getCorporationMails.
-	# method geCorporationMails - Alias to Corporation Object
-	# method getCharMails - Alias to getCharMails
-	# method getCharacterMails - Alias to Character Object
+	method getCharacterRecentKillmails(:$datasource) {
+		die "Object not instantiated with SSO object, please provide one to use this method."
+			unless self.sso.defined;
+
+		$!char-api.getRecentKillmails(:$datasource);
+	}
+
+	method getCorporationRecentKillmails(:$datasource) {
+		die "Object not instantiated with SSO object, please provide one to use this method."
+			unless self.sso.defined;
+
+		$!corp-api.getRecentKillmails(:$datasource);
+	}
 
 }

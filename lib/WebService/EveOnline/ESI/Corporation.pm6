@@ -133,6 +133,11 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $cid }/icons/", :$datasousrce);
   }
 
+  method getRecentKillmails(:$datasource) {
+    self.checkScope('esi-killmails.read_corporation_killmails.v1');
+    self.requestByPrefix("{ $.corporationID }/killmails/recent/", $datasource);
+  }
+
   method getIndustryJobs(:$datasource) {
     self.checkScope('esi-industry.read_corporation_jobs.v1');
     self.requestByPrefix("{ $.corporationID }/industry/jobs/", :$datasource);
