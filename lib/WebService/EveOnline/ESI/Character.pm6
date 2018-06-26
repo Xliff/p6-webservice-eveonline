@@ -228,8 +228,8 @@ DIE
 	}
 
 	method getClones(:$datasource) {
-		self.requestByPrefix("{ self.sso.characterID }/clones/", :$datasource);
 		self.checkScope('esi-clones.read_clones.v1');
+		self.requestByPrefix("{ self.sso.characterID }/clones/", :$datasource);
 	}
 
 	method getContacts(:$datasource) {
@@ -347,7 +347,7 @@ DIE
 
 	method getRoles(:$datasource) {
 		self.checkScope('esi-characters.read_corporation_roles.v1');
-		self.requestByPrefix("{$cid}/roles/", :$datasource);
+		self.requestByPrefix("{ $cid }/roles/", :$datasource);
 	}
 
 	method getStandings(:$datasource) {
