@@ -99,6 +99,25 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $.corporationID }/containers/logs/", :$datasousrce);
   }
 
+  method getContracts(:$datasource) {
+		self.checkScope('esi-contracts.read_corporation_contracts.v1');
+		self.requestByPrefix("{ $.corporationID }/contracts/");
+	}
+
+	method getContractBids($cid, :$datasource) {
+		die "<contractID> must be an Integer" unless $cid ~~ Int;
+
+		self.checkScope('esi-contracts.read_corporation_contracts.v1');
+		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/bids/");
+	}
+
+	method getContractItems($cid, :$datasource) {
+		die "<contractID> must be an Integer" unless $cid ~~ Int;
+
+		self.checkScope('esi-contracts.read_corporation_contracts.v1');
+		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/items/");
+	}
+
   method getDivisions(:$datasource) {
     self.checkScope('esi-corporations.read_divisions.v1');
     self.requestByPrefix("{ $.corporationID }/divisions/", :$datasousrce);
@@ -179,13 +198,18 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $.corporationID }/structures/", :$datasousrce);
   }
 
-  method getTitles {
+  method getTitles(:$datasource) {
     self.checkScope('esi-corporations.read_titles.v1');
     self.requestByPrefix("{ $.corporationID }/titles/", :$datasousrce);
   }
 
-  method getNPCorps {
+  method getNPCorps(:$datasource) {
     self.requestByPrefix("{ $.corporationID }/npccorps/", :$datasource);
+  }
+
+  method getWarfareStats(:$datasource) {
+    self.checkScope('esi-corporations.read_fw_stats.v1');
+    self.requestByPrefix("{ $.corporationID }/fw/stats/", :$datasource);
   }
 
 }

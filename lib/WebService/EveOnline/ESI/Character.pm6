@@ -207,6 +207,25 @@ class WebService::EveOnline::ESI::Character {
 		);
 	}
 
+	method getContracts(:$datasource) {
+		self.checkScope('esi-contracts.read_character_contracts.v1');
+		self.requestByPrefix("{ self.sso.characterID }/contracts/");
+	}
+
+	method getContractBids($cid, :$datasource) {
+		die "<contractID> must be an Integer" unless $cid ~~ Int;
+
+		self.checkScope('esi-contracts.read_character_contracts.v1');
+		self.requestByPrefix("{ self.sso.characterID }/contracts/{ $cid }/bids/");
+	}
+
+	method getContractItems($cid, :$datasource) {
+		die "<contractID> must be an Integer" unless $cid ~~ Int;
+
+		self.checkScope('esi-contracts.read_character_contracts.v1');
+		self.requestByPrefix("{ self.sso.characterID }/contracts/{ $cid }/items/");
+	}
+
 	method getCorporationHistory($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
@@ -296,6 +315,11 @@ class WebService::EveOnline::ESI::Character {
 	method getTitles(:$datasource) {
 		self.checkScope('esi-characters.read_titles.v1');
 		self.requestByPrefix("{ self.sso.characterID }/titles/", :$datasource);
+	}
+
+	method getWarfareStats(:$datasource) {
+		self.checkScope('esi-characters.read_fw_stats.v1');
+		self.requestByPrefix("{ self.sso.characterID }/fw/stats/", :$datasource);
 	}
 
 }
