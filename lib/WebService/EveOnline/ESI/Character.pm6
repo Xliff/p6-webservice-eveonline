@@ -17,13 +17,41 @@ class WebService::EveOnline::ESI::Character {
 
 		self.checkScope('esi-characters.write_contacts.v1');
 		self.postBodyByPrefix(
-			"{ self.sso.charachterID }/contacts/",
+			"{ self.sso.characterID }/contacts/",
 			to-json(@contacts),
 			:$datasource
 		);
 	}
 
-	method deleteContacts(@contacts, $datasource) {
+	method addFitting(%fitting, :$datasource) {
+		die qq:to/DIE/;
+<fitting> must contain the following items:
+		description: A description of the fittings [Str]
+		items: A list containing fitting items [Array].
+			Fitting items [Hash] must consist of:
+				flag: The fitting flag (hi, med, lo, drone, cargo, etc) [Int]
+				quantity: The number of item_ids [Int]
+				type_id: Type associated with the item [Int]
+		name: The name of the fitting [Str]
+		ship_type_id: The type_id associated with the ship this fitting is for. [Int]
+DIE
+			unless
+				(%fitting<description> && %fitting<description> ~~ Str)
+				||
+				(%fitting<items> && % %fitting<items> ~~ Array && %fitting<items>.all ~~ Hash)
+				||
+				(%fitting<name> && %fitting<name> ~~ Str)
+				||
+				(%fitting<ship_type_id> && %fitting<ship_type_id> ~~ Int);
+
+		self.postBodyByPrefix(
+			"{ self.sso.characterID }/fittings/",
+			to-json(%fitting),
+			:$datasource
+		);
+	}
+
+	method deleteContacts(@contacts, :$datasource) {
 		die "<contacts> must be an array of Integers"
 			unless @contacts.map( *.Int ).all() ~~ Int;
 
@@ -32,6 +60,16 @@ class WebService::EveOnline::ESI::Character {
 			"{ self.sso.characterID }/contacts/"
 			:method(RequestMethod::DELETE),
 			:contact_ids( @contacts.join(',') ),
+			:$datasource
+		);
+	}
+
+	method deletaFitting($fitting_id, :$datasource) {
+		die "<fittingID> must be an Integer" ~~ Int;
+		self.checkScope('esi-fittings.write_fittings.v1');
+		self.requestByPrefix(
+			"{ self.sso.characterID }/fittings/{ $fitting_id }/",
+			:method(RequestMethod::DELETE,
 			:$datasource
 		);
 	}
@@ -250,6 +288,11 @@ class WebService::EveOnline::ESI::Character {
 		self.requestByPrefix("{ self.sso.characterID }/fatigue/", :$datasource);
 	}
 
+	method getFittings(:$datasource) {
+		self.checkScope('esi-fittings.read_fittings.v1');
+		self.requestByPrefix("{ self.sso.characterID }/fittings/", :$datasource);
+	}
+
 	method getInformation($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
@@ -258,9 +301,14 @@ class WebService::EveOnline::ESI::Character {
 		self.requestByPrefix($cid, :$datasource);
 	}
 
+	method getFleet(:$datasource) {
+		self.checkScope('esi-fleets.read_fleet.v1');
+		self.requestByPrefix("{ self.sso.characterID }/fleet/", $datasource);
+	}
+
 	method getImplants(:$datasource) {
 		self.checkScope('esi-clones.read_implants.v1');
-		self.requesdtByPrefix("{ self.sso.characterID }/implants/", $datasource);
+		self.requestByPrefix("{ self.sso.characterID }/implants/", $datasource);
 	}
 
 	method getMedals(:$datasource) {
