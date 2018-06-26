@@ -297,17 +297,17 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/fittings/", :$datasource);
 	}
 
+	method getFleet(:$datasource) {
+		self.checkScope('esi-fleets.read_fleet.v1');
+		self.requestByPrefix("{ self.sso.characterID }/fleet/", $datasource);
+	}
+
 	method getInformation($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
 			unless $cid.Int ~~ Int;
 
 		self.requestByPrefix($cid, :$datasource);
-	}
-
-	method getFleet(:$datasource) {
-		self.checkScope('esi-fleets.read_fleet.v1');
-		self.requestByPrefix("{ self.sso.characterID }/fleet/", $datasource);
 	}
 
 	method getImplants(:$datasource) {
@@ -320,9 +320,14 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/industry/jobs/", $datasource);
 	}
 
-	method getRecentKillmails(:$datasource) {
-		self.checkScope('esi-killmails.read_killmails.v1');
-		self.requestByPrefix("{ self.sso.characterID }/killmails/recent/", $datasource);
+	method getLocation(:$datasource) {
+		self.checkScope('esi-location.read_location.v1');
+		self.requestByPrefix("{ self.sso.characterID }/location/", $datasource);
+	}
+
+	method getLoyaltyPoints(:$datasource) {
+		self.checkScope('esi-characters.read_loyalty.v1');
+		self.requestByPrefix("{ self.sso.characterID }/loyalty/points/", :$datasource);
 	}
 
 	method getMedals(:$datasource) {
@@ -356,6 +361,11 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/notifications/contracts/", :$datasource);
 	}
 
+	method getOnlineInformation(:$datasource) {
+		self.checkScope('esi-location.read_online.v1');
+		self.requestByPrefix("{ self.sso.characterID }/online/", :$datasource);
+	}
+
 	method getPortrait($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
@@ -364,9 +374,19 @@ DIE
 		self.requestByPrefix("{ $cid }/portrait/", :$datasource);
 	}
 
+	method getRecentKillmails(:$datasource) {
+		self.checkScope('esi-killmails.read_killmails.v1');
+		self.requestByPrefix("{ self.sso.characterID }/killmails/recent/", :$datasource);
+	}
+
 	method getRoles(:$datasource) {
 		self.checkScope('esi-characters.read_corporation_roles.v1');
 		self.requestByPrefix("{ $cid }/roles/", :$datasource);
+	}
+
+	method getShipInformation(:$datasource) {
+		self.checkScope('esi-location.read_ship_type.v1');
+		self.requestByPrefix("{ self.sso.characterID }/ship/", :$datasource);
 	}
 
 	method getStandings(:$datasource) {
@@ -386,6 +406,7 @@ DIE
 
 	method getWarfareStats(:$datasource) {
 		self.checkScope('esi-characters.read_fw_stats.v1');
+		# XXX - Needs a self.request because this prefix has changed.
 		self.requestByPrefix("{ self.sso.characterID }/fw/stats/", :$datasource);
 	}
 
