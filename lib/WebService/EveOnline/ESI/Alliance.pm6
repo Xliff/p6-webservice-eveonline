@@ -20,11 +20,22 @@ class WebService::EveOnline::ESI::Alliance {
     $!alliance_id = $i<alliance_id>;
   }
 
+	method character-id {
+		self.sso.characterID;
+	}
+
+	method corporation-id {
+		$!corp-api.corporationID;
+	}
+
+	method alliance-id {
+		$!alliance_id;
+	}
+
 	method !getAllianceParam($id?) {
     my $aid = $id // $!alliance_id;
 
-    die "<allianceID> must be an integer"
-      unless $aid.Int ~~ Int;
+    die "<allianceID> must be an integer" unless $aid.Int ~~ Int;
 
     $aid;
   }
@@ -38,31 +49,31 @@ class WebService::EveOnline::ESI::Alliance {
 		self.requestByPrefix('', :$datasource);
 	}
 
-	method getAllianceContacts(:$datasource) {
+	method getContacts(:$datasource) {
 		self.checkScope('esi-alliances.read_contacts.v1');
 		self.requestByPrefix("{ $!alliance_id }/contacts/", :$datasource);
 	}
 
-	method getAllianceContactLabels(:$datasource) {
+	method getContactLabels(:$datasource) {
 		self.checkScope('esi-alliances.read_contacts.v1');
 		self.requestByPrefix("{ $!alliance_id }/contacts/labels/", :$datasource);
 	}
 
-	method getAllianceCorporations($id?, :$datasource) {
+	method getCorporations($id?, :$datasource) {
 		my $aid = self!getAllianceParam($id);
 		self.requestByPrefix("{ $aid }/corporations/", :$datasource);
 	}
 
-	method getAllianceIcons($id?, :$datasource) {
+	method getIcons($id?, :$datasource) {
 		my $aid = self!getAllianceParam($id);
 		self.requestByPrefix("{ $aid }/icons/", :$datasource);
 	}
 
-	multi method getAllianceNames($ids, :$datasource) {
+	multi method getNames($ids, :$datasource) {
 		nextwith($ids.Array, :$datasource);
 	}
 
-	multi method getAllianceNames(@ids, :$datasource) {
+	multi method getNames(@ids, :$datasource) {
 		die "<allianceIDs> must all be a list of Integer" unless @ids.all() ~~ Int;
 		# TODO - This looks like it should be a request body. Insure that assumption
 		#        is correct.

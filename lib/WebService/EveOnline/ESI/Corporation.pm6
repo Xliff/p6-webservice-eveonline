@@ -21,10 +21,13 @@ class WebService::EveOnline::ESI::Corporation {
   method !getCorpParam($cid?) {
     my $cid = $corpId // $.corporationID;
 
-    die "<corporationID> must be an integer"
-      unless $cid.Int ~~ Int;
+    die "<corporationID> must be an integer" unless $cid.Int ~~ Int;
 
     $cid;
+  }
+
+  method corporation-id {
+    $!corporationID;
   }
 
   method getInformation($corpId?, :$datasource) {
@@ -47,33 +50,20 @@ class WebService::EveOnline::ESI::Corporation {
     die "<item_ids> must be a list of integers"
       unless @item_ids.all() ~~ Int;
 
-    # cw: Must be JSON encoded as the entire body.
-    my %extras = (
-      DATA => {
-        item_ids => @item_ids.join(','),
-      }
-    );
-
-    self.requestByPrefix(
-      "{ $!corporationID }/assets/locations/", :$datasource,
-      :method(RequestMethod::POST),
-      |%extras
+    self.postByPrefix(
+      "{ $!corporationID }/assets/locations/",
+      to-json(@item_ids),
+      :$datasource,
     );
   }
 
   method getAssetNames(@item_ids, :$datasource) {
     self.checkScope('esi-assets.read_corporation_assets.v1');
 
-    my %extras = (
-      DATA => {
-        item_ids => @item_ids.join(','),
-      }
-    );
-
-    self.requestByPrefix(
-      "{$!corporationID}/assets/names/", :$datasource,
-      :method(RequestMethod::POST),
-      |%extras
+    self.postByPrefix(
+      "{ $!corporationID }/assets/names/",
+      to-json(@item_ids),
+      :$datasource
     );
   }
 
@@ -91,6 +81,16 @@ class WebService::EveOnline::ESI::Corporation {
     # cw: [Optional] add single page retrieval
     self.checkScope('esi-corporations.read_blueprints.v1');
     self.requestByPrefix("{ $.corporationID }/blueprints/", :$datasource);
+  }
+
+  method getContacts(:$datasource) {
+    elf.checkScope('esi-corporations.read_contacts.v1');
+    self.requestByPrefix("{ $.corporationID }/contacts/", :$datasousrce);
+  }
+
+  method getContactLabels(:$datasource) {
+    elf.checkScope('esi-corporations.read_contacts.v1');
+    self.requestByPrefix("{ $.corporationID }/contacts/labels/", :$datasousrce);
   }
 
   method getContainerLogs(:$datasource) {

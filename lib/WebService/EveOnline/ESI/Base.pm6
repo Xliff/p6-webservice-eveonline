@@ -65,8 +65,7 @@ class WebService::EveOnline::ESI::Base {
 			$nf = 1;
 		}
 		for %args.keys -> $k {
-			$url ~= "{ $nf ?? '&' !! '?' }{ $k }={ %args{$k} }" if %args{$k};
-			$nf = 1 unless $nf;
+			$url ~= "?{ $k }={ %args{$k} }" if %args{$k};
 		}
 
 		#say "U: $url";

@@ -34,37 +34,28 @@ class WebService::EveOnline::ESI::Assets {
 		$!corpID;
 	}
 
-  method getCharacterAssets ($characterID?, :$datasource) {
-		$!char-api.getCharacterAssets($characterID, :$datasource);
+  method getCharacterAssets (:$datasource) {
+		$!char-api.getAssets(:$datasource);
 	}
 
-	method getCorporationAssets ($corporationID?, :$datasource) {
-		my $cid = $corporationID // $!corpID;
-		$!corp-api.getCorporationsAssets($cid, :$datasource);
+	method getCorporationAssets (:$datasource) {
+		$!corp-api.getAssets($cid, :$datasource);
 	}
 
-	method getCharacterAssetLocations (@item_ids, $characterID?, :$datasource) {
-		$!char-api.getCorporateAseetLocations(
-			$characterID, @item_ids, :$datasource
-		);
+	method getCharacterAssetLocations (@item_ids, :$datasource) {
+		$!char-api.getAssetLocations(@item_ids, :$datasource);
 	}
 
-  method getCorporationAssetLocations (@item_ids, $corporationID?, :$datasource) {
-		$!corp-api.getCorporateAseetLocations(
-			$corporationID, @item_ids, :$datasource
-		);
+  method getCorporationAssetLocations (@item_ids, :$datasource) {
+		$!corp-api.getAssetLocations(@item_ids, :$datasource);
 	}
 
-	method getCharacterAssetNames(@item_ids, $characterID?, :$datasource) {
-		$!char-api.getCharacterAssetNames(
-			$characterID, @item_ids, :$datasource
-		);
+	method getCharacterAssetNames(@item_ids, :$datasource) {
+		$!char-api.getAssetNames(@item_ids, :$datasource);
 	}
 
 	method getCorporationAssetNames(@item_ids, $corporationID?, :$datasource) {
-		$!char-api.getCorporationAssetNames(
-			$corporationID, @item_ids, :$datasource
-		);
+		$!char-api.getAssetNames(@item_ids, :$datasource);
 	}
 
 }

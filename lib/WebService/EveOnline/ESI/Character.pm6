@@ -11,16 +11,52 @@ class WebService::EveOnline::ESI::Character {
     self.appendPrefix("/{ self.type }/characters/");
   }
 
+	method addContacts(@contacts, :$datasource) {
+		die "<contacts> must be a list of Integers"
+			unless @contact_ids.map( *.Int ).all() ~~ Int;
+
+		self.checkScope('esi-characters.write_contacts.v1');
+		self.postBodyByPrefix(
+			"{ self.sso.charachterID }/contacts/",
+			to-json(@contacts),
+			:$datasource
+		);
+	}
+
 	method deleteContacts(@contacts, $datasource) {
 		die "<contacts> must be an array of Integers"
 			unless @contacts.map( *.Int ).all() ~~ Int;
 
 		self.checkScope('esi-characters.write_contacts.v1');
 		self.requestByPrefix(
-			"{ self.sso.characterID/contacts/}"
+			"{ self.sso.characterID }/contacts/"
 			:method(RequestMethod::DELETE),
 			:contact_ids( @contacts.join(',') ),
 			:$datasource
+		);
+	}
+
+	method editContacts(@contacts, $changes, :$datasource) {
+		die "<contacts> must be a list of Integers"
+			unless @contacts.map( *.Int ).all() ~~ Int;
+		die qq:to/DIE/;
+	<changes> must have at least one of the following keys set:
+	    label_ids: List of labels to add to the contact.
+			standing: Real number from -10 to 10
+			watched: 1 or 0
+	DIE
+			unless
+				( $changes<label_ids> && $changes<label_ids>.map( *.Int ).all() ~~ Int )
+				||
+				( $changes<standing> && -10 < $changes<standing> < 10 )
+				||
+				( $changes<watched> && $changes<watched> == (1, 0).any() );
+
+		self.putByPrefix(
+			"{ self.sso.characterID }/contacts/",
+			to-json(@contacts),
+			:$datasource,
+			|$changes.Hash
 		);
 	}
 
@@ -39,7 +75,7 @@ class WebService::EveOnline::ESI::Character {
 			say "C{$p}: {$cmd}";
 			my $json = qqx{$cmd};
 			# cw: Also write $json out to a file.
-$json.say;
+#$json.say;
 			#
 			my $o = from-json($json);
 			$assetList.push: $o;
@@ -62,7 +98,7 @@ $json.say;
 		);
 	}
 
-	method getAssets (Int :$page, :$datasource) {
+	method getAssets (Int :$page = 1, :$datasource) {
 		self.checkScope('esi-assets.read_assets.v1');
 
 		# This may not be necessary after the move to CRO::Http
@@ -163,6 +199,13 @@ $json.say;
 		self.requestByPrefix("{ self.sso.characterID }/contacts/", :$datasource);
 	}
 
+	method getContactLabels(:$datasource) {
+		self.checkScope('esi-characters.read_contacts.v1');
+		self.requestByPrefix(
+			"{ self.sso.characterID }/contacts/labels/",
+			:$datasource
+		);
+	}
 
 	method getCorporationHistory($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
@@ -176,7 +219,7 @@ $json.say;
 		my $cid = self.sso.characterID;
 		self.checkScope('esi-characters.read_contacts.v1');
 		die "<characterIDs> must be a list of integers"
-			unless @characterIDs.all() ~~ Int;
+			unless @characterIDs.map( *.Int ).all() ~~ Int;
 
 		self.postBodyByPrefix(
 			"{ $cid }/cspa/", to-json(@characterIDs), :$datasource
@@ -208,7 +251,7 @@ $json.say;
 
 	method getNames(@characterIDs, :$datasource) {
 		die "<characterIDs> must be a list of integers"
-			unless @characterIDs.all() ~~ Int;
+			unless @characterIDs.map( *.Int ).all() ~~ Int;
 
 		my %extras = (
 			character_ids => @characterIDs.join(','),
