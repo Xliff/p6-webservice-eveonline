@@ -249,6 +249,25 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $.corporationID }/npccorps/", :$datasource);
   }
 
+  method getWallet(:$datasource) {
+    self.checkScope('esi-wallet.read_corporation_wallets.v1');
+    self.requestByPrefix("{ $.corporationID }/wallet/", :$datasource);
+  }
+
+  method getWalletJournal($div_id, :$datasource) {
+    die "<divisionID> must be an Integer." unless $div_id ~~ Int;
+
+    self.checkScope('esi-wallet.read_corporation_wallets.v1');
+    self.requestByPrefix("{ $.corporationID }/wallet/{ $div_id }/journal/", :$datasource);
+  }
+
+  method getWalletTransactions($div_id, :$datasource) {
+    die "<divisionID> must be an Integer." unless $div_id ~~ Int;
+
+    self.checkScope('esi-wallet.read_corporation_wallets.v1');
+    self.requestByPrefix("{ $.corporationID }/wallet/{ $div_id }/transactions/", :$datasource);
+  }
+
   method getWarfareStats(:$datasource) {
     self.checkScope('esi-corporations.read_fw_stats.v1');
     self.requestByPrefix("{ $.corporationID }/fw/stats/", :$datasource);

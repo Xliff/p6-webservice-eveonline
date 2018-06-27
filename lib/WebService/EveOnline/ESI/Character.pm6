@@ -445,6 +445,21 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/titles/", :$datasource);
 	}
 
+	method getWallet(:$datasource) {
+		self.checkScope('esi-wallet.read_character_wallet.v1');
+		self.requestByPrefix("{ self.sso.characterID }/wallet/", :$datasource);
+	}
+
+	method getWalletJournal(:$datasource) {
+		self.checkScope('esi-wallet.read_character_wallet.v1');
+		self.requestByPrefix("{ self.sso.characterID }/wallet/journal/", :$datasource);
+	}
+
+	method getWalletTransactions(:$datasource) {
+		self.checkScope('esi-wallet.read_character_wallet.v1');
+		self.requestByPrefix("{ self.sso.characterID }/wallet/transactions/", :$datasource);
+	}
+
 	method getWarfareStats(:$datasource) {
 		self.checkScope('esi-characters.read_fw_stats.v1');
 		self.requestByPrefix("{ self.sso.characterID }/fw/stats/", :$datasource);

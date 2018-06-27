@@ -6,7 +6,7 @@ class WebService::EveOnline::ESI::Universe {
 	also is WebService::EveOnline::ESI::Base;
 
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/universe/");
+		self.appendPrefix("/{ self.type }/universe/");
 	}
 
 	method getBloodlines(:$datasource, :$language) {
@@ -53,13 +53,29 @@ class WebService::EveOnline::ESI::Universe {
 		self.getRequestByPrefix("groups/{ $id }", :$datasource, :$language);
 	}
 
+	method getIDs(@names, :$datasource) {
+		die "<names> must be a list of strings" unless @names.all() ~~ Str;
+
+		self.postBodyByPrefix(
+			"ids/",
+			to-json(@names),
+			:$datasource
+		);
+	}
+
 	method getMoon($id, :$datasource) {
 		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
 		self.getRequestByPrefix("moons/{ $id }", :$datasource);
 	}
 
-	method getNames(:$datasource) {
-		self.getRequestByPrefix('names/', :$datasource);
+	method getNames(@ids, :$datasource) {
+		die "<ids> must be a list of Integers!" unless @ids.all() ~~ Int;
+
+		self.postBodyByPrefix(
+			'names/',
+			to-jsonj(@ids),
+			:$datasource
+		);
 	}
 
 	method getPlanet($id, :$datasource) {
@@ -78,6 +94,11 @@ class WebService::EveOnline::ESI::Universe {
 	method getRegion($id, :$datasource, :$language) {
 		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
 		self.getRequestByPrefix("regions/{ $id }", :$datasource, :$language);
+	}
+
+	method getSchematics($id, :$datasource) {
+		die "<schematicID> must be an Integer." $id ~~ Int;
+		self.requestByPrefix("schematics/{ $id }/", :$datasource);
 	}
 
 	method getStargate($id, :$datasource) {
@@ -101,7 +122,7 @@ class WebService::EveOnline::ESI::Universe {
 
 	method getStructure($id, :$datasource) {
 		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("registructures/{ $id }", :$datasource);
+		self.getRequestByPrefix("structures/{ $id }", :$datasource);
 	}
 
 	method getSystemJumps(:$datasource) {
