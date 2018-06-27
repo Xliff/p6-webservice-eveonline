@@ -465,4 +465,25 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/fw/stats/", :$datasource);
 	}
 
+	method search($search, @categories, :$strict, :$datasource) {
+		my @val_cats = <
+			agent alliance character constellation corporation faction
+			inventory_type region solar_system station structure
+		>;
+
+		die qq:to/DIE/;
+<categories> must be a list of one of the following strings:
+	{ @val_cats.join("\n\  ") }
+DIE
+		unless @categories.all() eq @val_cats.any();
+
+		self.checkScope('esi-search.search_structures.v1');
+		self.requestByPrefix(
+			"{ self.sso.characterID }/search/",
+			:categories( @categories.join(',') )
+			:strict($strict.Bool.Str.lc),
+			:$datasource
+		);
+	}
+
 }
