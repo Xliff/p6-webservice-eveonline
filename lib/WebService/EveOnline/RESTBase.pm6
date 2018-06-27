@@ -183,6 +183,10 @@ class WebService::EveOnline::RESTBase {
 		$!request-prefix = $prefix;
 	}
 
+	method getPrefix {
+		$!request-prefix;
+	}
+
 	method postBody($url, $content, :$content-type, :$bin = False) {
 		my ($request, $response);
 		my $postclient = HTTP::UserAgent.new(

@@ -5,8 +5,25 @@ use WebService::EveOnline::ESI::Base;
 class WebService::EveOnline::ESI::Opportunities {
 	also is WebService::EveOnline::ESI::Base;
 
+	has $!char-api;
+
+	submethod BUILD {
+		$!char-api = WebService::EveOnline::ESI::Character.new(self.sso);
+	}
+
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/opportunities/");
+		self.appendPrefix("/{ self.type }/opportunities/");
+	}
+
+	method new(:$sso) {
+		self.bless(:$sso);
+	}
+
+	method getCharacterOpportunities(:$datasource) {
+		die "No authorization has been provided for this method."
+			unless self.sso.defined;
+
+	  $!char-api.getOpportunities(:$datasource);
 	}
 
 	method getGroups(:$datasource) {
@@ -25,8 +42,4 @@ class WebService::EveOnline::ESI::Opportunities {
 		self.requestByPrefix("task/{ $id }", :$datasource);
 	}
 
-	# cw: --- TODO ---
-	# getCharOpportinities - Alias to getCharacterOpportunities
-	# getCharcterOpportunities - Alias to Character object.
-	
 }

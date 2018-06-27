@@ -376,6 +376,11 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/online/", :$datasource);
 	}
 
+	method getOpportunities(:$datasource) {
+		self.checkScope('esi-characters.read_opportunities.v1');
+		self.requestByPrefix("{ self.sso.characterID }/opportunities/", :$datasource);
+	}
+
 	method getPortrait($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
@@ -416,7 +421,6 @@ DIE
 
 	method getWarfareStats(:$datasource) {
 		self.checkScope('esi-characters.read_fw_stats.v1');
-		# XXX - Needs a self.request because this prefix has changed.
 		self.requestByPrefix("{ self.sso.characterID }/fw/stats/", :$datasource);
 	}
 

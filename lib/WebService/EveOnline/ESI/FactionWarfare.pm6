@@ -20,14 +20,14 @@ class WebService::EveOnline::ESI::FactionWarfare {
 	}
 
 	method getCharacterWarfareStats(:$datasource) {
-		die "Object must be instantiated with a valid <sso> token"
+		die "No authorization has been provided for this method."
 			unless self.sso.defined;
 
 		$!char-api.getWarfareStats(:$datasource);
 	}
 
 	method getCorporationWarfareStats(:$datasource) {
-		die "Object must be instantiated with a valid <sso> token"
+		die "No authorization has been provided for this method."
 			unless self.sso.defined;
 
 		$!corp-api.getWarfareStats(:$datasource);
