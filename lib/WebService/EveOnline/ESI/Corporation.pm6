@@ -118,6 +118,11 @@ class WebService::EveOnline::ESI::Corporation {
 		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/items/");
 	}
 
+  method getCustomsOffices(:$datasource) {
+    self.checkScope('esi-planets.read_customs_offices.v1');
+    self.requestByPrefix("{ $.corporationID }/customs_offices/", :$datasource);
+  }
+
   method getDivisions(:$datasource) {
     self.checkScope('esi-corporations.read_divisions.v1');
     self.requestByPrefix("{ $.corporationID }/divisions/", :$datasousrce);

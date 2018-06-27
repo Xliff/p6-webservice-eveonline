@@ -171,6 +171,11 @@ DIE
 		);
 	}
 
+	method getAttributes(:$datasource) {
+		self.checkScope('esi-skills.read_skills.v1');
+		self.requestByPrefix("{ self.sso.characterID }/attributes/", :$datasource);
+	}
+
 	method getBookmarks(:$datasource) {
 		self.checkScope('esi-bookmarks.read_character_bookmarks.v1');
 		self.requestByPrefix("{ self.sso.characterID }/bookmarks/", $datasource);
@@ -381,6 +386,17 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/opportunities/", :$datasource);
 	}
 
+	method getPlanet($pid, :$datasource) {
+		die "<planetID> must be an Integer" unless $pid ~~ Int;
+		self.checkScope('esi-planets.manage_planets.v1');
+		self.requestByPrefix("{ self.sso.characterID }/planets/{ $pid }/", :$datasource);
+	}
+
+	method getPlanets(:$datasource) {
+		self.checkScope('esi-planets.manage_planets.v1');
+		self.requestByPrefix("{ self.sso.characterID }/planets/", :$datasource);
+	}
+
 	method getPortrait($characterID?, :$datasource) {
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer"
@@ -402,6 +418,16 @@ DIE
 	method getShipInformation(:$datasource) {
 		self.checkScope('esi-location.read_ship_type.v1');
 		self.requestByPrefix("{ self.sso.characterID }/ship/", :$datasource);
+	}
+
+	method getSkills(:$datasource) {
+		self.checkScope('esi-skills.read_skillqueue.v1');
+		self.requestByPrefix("{ self.sso.characterID }/skillqueue/", :$datasource);
+	}
+
+	method getSkillQueue(:$datasource) {
+		self.checkScope('esi-skills.read_skills.v1');
+		self.requestByPrefix("{ self.sso.characterID }/skills/", :$datasource);
 	}
 
 	method getStandings(:$datasource) {
