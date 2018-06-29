@@ -18,8 +18,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getCategory($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("categories/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("categories/{ $id }/", :$datasource, :$language);
 	}
 
 	method getConstellations(:$datasource) {
@@ -27,8 +27,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getConstellation($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("constellations/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("constellations/{ $id }/", :$datasource, :$language);
 	}
 
 	method getFactions(:$datasource) {
@@ -40,8 +40,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getGraphic($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("graphics/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("graphics/{ $id }/", :$datasource);
 	}
 
 	method getGroups(:$datasource) {
@@ -49,8 +49,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getGroup($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("groups/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("groups/{ $id }/", :$datasource, :$language);
 	}
 
 	method getIDs(@names, :$datasource) {
@@ -64,8 +64,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getMoon($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("moons/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("moons/{ $id }/", :$datasource);
 	}
 
 	method getNames(@ids, :$datasource) {
@@ -73,13 +73,13 @@ class WebService::EveOnline::ESI::Universe {
 
 		self.postBodyByPrefix(
 			'names/',
-			to-jsonj(@ids),
+			to-json(@ids),
 			:$datasource
 		);
 	}
 
 	method getPlanet($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
+		die "ID must resolve to an integer!" unless $id ~~ Int;
 		self.getRequestByPrefix("planets/{ $id }", :$datasource);
 	}
 
@@ -92,8 +92,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getRegion($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("regions/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("regions/{ $id }/", :$datasource, :$language);
 	}
 
 	method getSchematics($id, :$datasource) {
@@ -102,18 +102,18 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getStargate($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stargates/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("stargates/{ $id }/", :$datasource);
 	}
 
 	method getStar($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stars/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("stars/{ $id }/", :$datasource);
 	}
 
 	method getStation($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stars/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("stars/{ $id }/", :$datasource);
 	}
 
 	method getStructures(:$datasource) {
@@ -121,8 +121,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getStructure($id, :$datasource) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("structures/{ $id }", :$datasource);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("structures/{ $id }/", :$datasource);
 	}
 
 	method getSystemJumps(:$datasource) {
@@ -138,8 +138,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getSystem($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("systems/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("systems/{ $id }/", :$datasource, :$language);
 	}
 
 	method getTypes(:$datasource) {
@@ -147,8 +147,8 @@ class WebService::EveOnline::ESI::Universe {
 	}
 
 	method getType($id, :$datasource, :$language) {
-		die "Invalid ID! ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("types/{ $id }", :$datasource, :$language);
+		die "ID must resolve to an integer!" unless $id ~~ Int;
+		self.getRequestByPrefix("types/{ $id }/", :$datasource, :$language);
 	}
 
 }

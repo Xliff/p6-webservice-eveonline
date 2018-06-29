@@ -5,6 +5,8 @@ use WebService::EveOnline::ESI::Character;
 use WebService::EveOnline::ESI::Corporation;
 
 class WebService::EveOnline::ESI::Wallet {
+  also is WebService::EveOnline::ESI::Base;
+  
   has $!char-api;
   has $!corp-api;
 

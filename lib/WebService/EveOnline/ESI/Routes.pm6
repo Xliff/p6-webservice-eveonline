@@ -6,14 +6,14 @@ class WebService::EveOnline::ESI::Routes {
 	also is WebService::EveOnline::ESI::Base;
 
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/route/");
+		self.appendPrefix("/{ self.type }/route/");
 	}
 
 	method get($orig, $dest, :@avoid, :@connections, :$flag) {
 		self.getRoute($orig, $dest, :$datasource, :@avoid, :@connections, :$flag);
 	}
 	method getRoute($orig, $dest, :$datasource, :@avoid, :@connections, :$flag) {
-		die "Invalid <flag> value specidied! Must be one of 'shortest', 'secure', or 'insecure')"
+		die "Invalid <flag> value specidied! Must be one of 'shortest', 'secure', or 'insecure'"
 			unless $flag == <shortest secure insecure>.any;
 
 		# cw: --- TODO ---
