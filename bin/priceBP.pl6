@@ -625,6 +625,7 @@ multi sub MAIN (Str :$type_name!, Str :$sqlite, *%extras) {
 					esi-assets.read_assets.v1
 					esi-assets.read_corporation_assets.v1
 				>),
+				:section('priceCheck'),
 				:realm('ESI')
 			);
 			$sso.getToken;

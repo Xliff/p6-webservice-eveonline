@@ -2,6 +2,8 @@ use v6.c;
 
 our enum RequestMethod is export <POST GET PUT DELETE HEAD>;
 
+constant DEFAULT_HOME is export = "{ %*ENV<HOME> }/.ws_eve";
+
 class WebService::EveOnline::Base {
 	use DateTime::Parse;
 	use HTTP::UserAgent;
@@ -52,9 +54,9 @@ class WebService::EveOnline::Base {
 			$!cache_prefix = $cache_prefix.defined ??
 				$cache_prefix
 				!!
-				"{%*ENV<HOME>}/.ws_eve";
+				DEFAULT_HOME;
 
-			$!cache_prefix ~= "{$*SPEC.dir-sep}{$cache_prefix_add}"
+			$!cache_prefix ~= "{ $*SPEC.dir-sep }{ $cache_prefix_add }"
 				if $cache_prefix_add.defined;
 
 			$!cache_date_interp = $cache_date_interp
@@ -121,7 +123,7 @@ class WebService::EveOnline::Base {
 		#say "WR: Writing to {$!response_file}";
 
 		my $h = $!response_file.IO.open(:w, :bin);
-		die "Cannot open cache file '{$!response_file}' for writing"
+		die "Cannot open cache file '{ $!response_file }' for writing"
 			unless $h ~~ IO::Handle;
 		$h.write($r.encode("utf-8"));
 		$h.close();
@@ -133,7 +135,7 @@ class WebService::EveOnline::Base {
 
 		# cw: Might want to return better information in this error message
 		#     ...somehow
-		die "Cannot set modification time on '{$!response_file}'"
+		die "Cannot set modification time on '{ $!response_file }'"
 			unless utime($!response_file, $tb) == 0;
 
 		#say "File modification time set to {$ttd.Str}";

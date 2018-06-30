@@ -1,7 +1,10 @@
 use v6.c;
 
+use WebService::EveOnline::Base;
+
 class WebService::EveOnline::SSO {
 	use Base64;
+	use Config::INI;
 	use DateTime::Parse;
 	use HTML::Parser::XML;
 	use HTTP::UserAgent;
@@ -17,22 +20,31 @@ class WebService::EveOnline::SSO {
 
 	constant PREFIX = "https://login.eveonline.com";
 
-	has $!realm;
-	has $!postclient;
-	has $!client;
-	has $!xmldoc;
-	has $.lastTokenDate;
-	has $.expires;
-	has $.tokenData;
+	has @.scopes;
 	has %!fieldsInForm;
 	has %.privateData;
-	has @.scopes;
+	has $!client;
+	has $!postclient;
+	has $!privateFile;
+	has $!privatePrefix;
+	has $!realm;
+	has $!section;
+	has $!xmldoc;
+	has $.expires;
+	has $.lastTokenDate;
+	has $.tokenData;
 
 	# Store the Character ID selected so that consumers can query for it,
 	# later.
 	has $.characterID;
 
-	submethod BUILD(:@scopes, :$realm) {
+	submethod BUILD(
+		:@scopes,
+		:$realm,
+		:$section,
+		:$privatePrefix,
+		:$privateFile
+	) {
 		$!client = HTTP::UserAgent.new(
 			:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
 		);
@@ -42,14 +54,18 @@ class WebService::EveOnline::SSO {
 			:useragent<WebService::EveOnline v0.0.9 (rakudo)>
 		);
 
+		$!privatePrefix = $privatePrefix // DEFAULT_HOME;
+		$!privateFile = "{ $!privatePrefix }/{ $privateFile // 'privateData' }";
+		$!section = $section // '_';
+
 		@!scopes = @scopes;
 		$!realm = $realm;
 
 		self!getPrivateData;
 	}
 
-	method new(:@scopes, :$realm) {
-		self.bless(:@scopes, :$realm);
+	method new(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile) {
+		self.bless(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile);
 	}
 
 	method characterID {
@@ -58,18 +74,17 @@ class WebService::EveOnline::SSO {
 
 	method !encodeAuth {
 		encode-base64(
-			"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
+			#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
+			%!privateData{$!section}<client_id secret_id>.join(':'), :str
 		);
 	}
 
 	method !getPrivateData {
 		# Override this to implement custom data retrieval method.
-		if ".privateData".IO.e {
-			my $contents = ".privateData".IO.slurp;
-			for $contents ~~ m:g/(\w+) \s* '=' \s* (\S+)/ -> $m {
-				%!privateData{$m[0].Str} = $m[1].Str;
-			}
-		}
+		# cw: Consider using a callback to implement custom retrieval rather
+		#     than forced subclassing.
+		%!privateData = Config::INI::parse($!privateFile.IO.slurp)
+				if $!privateFile.IO.e
 	}
 
 	method !getState {
@@ -80,11 +95,11 @@ class WebService::EveOnline::SSO {
 	method !handleLogin {
 		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
 		my $form_data = {
-		 	ClientIdentifier 	=> %.privateData<client_id>,
-		 	UserName 			    => %.privateData<username>,
-		 	Password			    => %.privateData<password>,
+		 	ClientIdentifier 	=> %.privateData{$!section}<client_id>,
+		 	UserName 			    => %.privateData<_><username>,
+		 	Password			    => %.privateData<_><password>,
 		 	RememberMe		    => 'false',
-			realm				      => %.privateData<realm>
+			realm				      => %.privateData<_><realm>
 		};
 		$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
 
@@ -174,7 +189,7 @@ class WebService::EveOnline::SSO {
 		my $input = '';
 		my ($cid, $cName);
 		my %toons = do for @options {
-			if (%!privateData<CHARACTER> // '') eq $_[0].text {
+			if (%!privateData<_><CHARACTER> // '') eq $_[0].text {
 				$cid = $input = $_<value>;
 				$cName = $_[0].text;
 			}
@@ -282,18 +297,18 @@ class WebService::EveOnline::SSO {
 		# cw: Should throw an exception, instead.
 		die "Missing required private parameters"
 			unless
-				%.privateData<client_id>.defined &&
-				%.privateData<secret_id>.defined &&
-				%.privateData<username>.defined  &&
-				%.privateData<password>.defined;
+				%.privateData{$!section}<client_id>.defined &&
+				%.privateData{$!section}<secret_id>.defined &&
+				%.privateData<_><username>.defined  &&
+				%.privateData<_><password>.defined;
 
 		my $redir = %!privateData<redirect_uri> // "http://localhost:8888/";
 		my $p = prepParams([
-			[ 'response_type', 	'code' 					          ],
-			[ 'redirect_uri', 	$redir 					          ],
-			[ 'client_id', 		  %!privateData<client_id>  ],
-			[ 'scope', 			    @.scopes.join(' ')  	    ],
-			[ 'state',  		    ($state = self!getState)  ]
+			[ 'response_type', 	'code' 					                     ],
+			[ 'redirect_uri', 	$redir 					                     ],
+			[ 'client_id', 		  %!privateData{$!section}<client_id>  ],
+			[ 'scope', 			    @.scopes.join(' ')  	               ],
+			[ 'state',  		    ($state = self!getState)             ]
 		]);
 		my $url = "{ PREFIX }/oauth/authorize?{ $p }";
 		my $response;
@@ -329,8 +344,7 @@ class WebService::EveOnline::SSO {
 			%!fieldsInForm{$f<name>} = 1;
 		}
 
-		$response = self!handleCharSelect
-			if %!fieldsInForm<CharacterId>;
+		$response = self!handleCharSelect if %!fieldsInForm<CharacterId>;
 
 		# At this point, the redirect should contain a code parameter.
 		# Search for it.
@@ -339,9 +353,10 @@ class WebService::EveOnline::SSO {
 			$tokenCode = $/[0].Str;
 		}
 
+		$response.content.say;
+
 		# cw: Should be an exception
-		die "Could not find tokenCode in response data"
-			unless $tokenCode;
+		die "Could not find tokenCode in response data" unless $tokenCode;
 
 		my $form_data = {
 			grant_type	=> 'authorization_code',

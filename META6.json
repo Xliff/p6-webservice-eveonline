@@ -18,6 +18,7 @@
   ],
   "depends" : [
 	  "Inline::Perl5",
+	  "Config::INI",
 	  "Data::Dumper",
 	  "DBIish",
 	  "DateTime::Parse",

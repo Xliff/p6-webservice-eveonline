@@ -10,7 +10,6 @@ class WebService::EveOnline::ESI::Assets {
 
 	has $!char-api;
 	has $!corp-api;
-	has $.corpID;
 
 	submethod BUILD {
 		$!char-api = WebService::EveOnline::ESI::Character.new(self.sso);
@@ -36,7 +35,7 @@ class WebService::EveOnline::ESI::Assets {
 	}
 
 	method getCorporationAssets (:$datasource) {
-		$!corp-api.getAssets($cid, :$datasource);
+		$!corp-api.getAssets(:$datasource);
 	}
 
 	method getCharacterAssetLocations (@item_ids, :$datasource) {

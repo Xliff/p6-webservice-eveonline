@@ -28,7 +28,7 @@ class WebService::EveOnline::ESI::Market {
 	}
 
 	method corporation-id {
-		self.sso.defined ?? $corp-api.corporation-id !! Nil;
+		self.sso.defined ?? $!corp-api.corporation-id !! Nil;
 	}
 
 	method getCharacterOrders(:$datasource) {

@@ -484,6 +484,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 					esi-assets.read_corporation_assets.v1
 				>),
 				:realm('ESI'),
+				:section('priceCheck')
 			);
 			$sso.getToken;
 			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);

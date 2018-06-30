@@ -16,8 +16,8 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method addContacts(@contacts, :$datasource) {
-		die "<contacts> must be a list of Integers"
-			unless @contact_ids.map( *.Int ).all() ~~ Int;
+		die '<contacts> must be a list of Integers'
+			unless @contacts.map( *.Int ).all() ~~ Int;
 
 		self.checkScope('esi-characters.write_contacts.v1');
 		self.postBodyByPrefix(
@@ -33,7 +33,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	multi method addFitting(%fitting, :$datasource) {
-		die qq:to/DIE/;
+		die qq:to/DIE/
 <fitting> must contain the following items:
 		description: A description of the fittings [Str]
 		items: A list containing fitting items [Array].
@@ -47,7 +47,7 @@ DIE
 			unless
 				( %fitting<description> && %fitting<description> ~~ Str )
 				||
-				( %fitting<items> && % %fitting<items> ~~ Array && %fitting<items>.all ~~ Hash )
+				( %fitting<items> && %fitting<items> ~~ Array && %fitting<items>.all ~~ Hash )
 				||
 				( %fitting<name> && %fitting<name> ~~ Str )
 				||
@@ -66,7 +66,7 @@ DIE
 	}
 
 	multi method addMailLabel(%label, :$datasource) {
-		die qq:to/DIE/;
+		die qq:to/DIE/
 <mailLabel> must be a Hash containing the following items:
 		color: An HTML color code string
 		name: A string containing the name of the new label
@@ -132,7 +132,7 @@ DIE
 	method editContacts(@contacts, $changes, :$datasource) {
 		die "<contacts> must be a list of Integers"
 			unless @contacts.map( *.Int ).all() ~~ Int;
-		die qq:to/DIE/;
+		die qq:to/DIE/
 	<changes> must have at least one of the following keys set:
 	    label_ids: List of labels to add to the contact.
 			standing: Real number from -10 to 10
@@ -261,7 +261,7 @@ DIE
 		);
 	}
 
-	method putCalendarEvent($eveentid, $response, :$datasource) {
+	method putCalendarEvent($eventid, $response, :$datasource) {
 		die "<eventID> must be an integer" unless $eventid ~~ Int;
 		die "<response> must be one of 'accepted', 'declined' or 'tentative'"
 			unless $response eq <accepted declined tentative>.all();
@@ -430,7 +430,8 @@ DIE
 		self.requestByPrefix(
 			'names/',
 			:$datasource,
-			:$character_ids( @characterIDs.join(',') )
+			:character_ids( @characterIDs.join(',') )
+		);
 	}
 
 	method getNotifications(:$datasource) {
@@ -479,7 +480,7 @@ DIE
 
 	method getRoles(:$datasource) {
 		self.checkScope('esi-characters.read_corporation_roles.v1');
-		self.requestByPrefix("{ $cid }/roles/", :$datasource);
+		self.requestByPrefix("{ self.sso.characterID }/roles/", :$datasource);
 	}
 
 	method getShipInformation(:$datasource) {
@@ -538,7 +539,7 @@ DIE
 			inventory_type region solar_system station structure
 		>;
 
-		die qq:to/DIE/;
+		die qq:to/DIE/
 <categories> must be a list of one of the following strings:
 	{ @val_cats.join("\n\  ") }
 DIE
@@ -560,7 +561,7 @@ DIE
 
 	multi method sendMail(%mail-data, :$datasource) {
 		# cw: Consider breaking this up into separate checks. For now, this works:
-		die qq:to/DIE/;
+		die qq:to/DIE/
 <mailData> must be a has containing the following elements:
 	approved_cost: Amount of CSPA fee for mail
 	body: String contianing body of message
@@ -573,34 +574,34 @@ DIE
 		 or
 		 'alliance'
 	subject: A string containing the contents of the subject line.
-	DIE
+DIE
 			unless [&&](
-				$mail-data ~~ Hash,
-				$mail-data<approved_cost>,
-				$mail-data<approved_cost> ~~ Int,
-				$mail-data<body> ~~ Str,
-				$mail-data<recipients> ~~ Array
-				$mail-data<recipients>.all() ~~ Hash,
-				$mail-data<subject> ~~ Str
+				%mail-data ~~ Hash,
+				%mail-data<approved_cost>,
+				%mail-data<approved_cost> ~~ Int,
+				%mail-data<body> ~~ Str,
+				%mail-data<recipients> ~~ Array,
+				%mail-data<recipients>.all() ~~ Hash,
+				%mail-data<subject> ~~ Str
 			);
 
 		self.checkScope('esi-mail.send_mail.v1');
 		self.postBodyByPrefix(
 			"{ self.sso.characterID }/mail/",
-			to-json($mail-data),
+			to-json(%mail-data),
 			:$datasource
 		);
 	}
 
 	multi method updateMail($mid, $updates, :$datasource) {
 		die "<updates> must be a Hash" unless $updates ~~ Hash;
-		nextwith($mid, $updates.Hash, :$datsource);
+		nextwith($mid, $updates.Hash, :$datasource);
 	}
 
-	method updateMail($mid, %updates, :$datasource) {
+	multi method updateMail($mid, %updates, :$datasource) {
 		die "<mailID> must be an Integer." unless $mid ~~ Int;
 
-		die qq:to/DIE/;
+		die qq:to/DIE/
 <updates> must be a hash containing the following items:
 	labels: A list of IDs representing the labels to be assigned to the message
 	read: A boolean value. A true value marks the message as being read.

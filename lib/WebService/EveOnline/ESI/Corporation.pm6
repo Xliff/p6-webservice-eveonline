@@ -18,7 +18,7 @@ class WebService::EveOnline::ESI::Corporation {
     self.appendPrefix("/{ self.type }/corporations/");
   }
 
-  method !getCorpParam($cid?) {
+  method !getCorpId($corpId?) {
     my $cid = $corpId // $.corporationID;
 
     die "<corporationID> must be an integer" unless $cid.Int ~~ Int;
@@ -77,26 +77,26 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $.corporationID }/bookmarks/folders/", $datasource);
   }
 
-  method getBlueprints {
+  method getBlueprints(:$datasource) {
     # cw: [Optional] add single page retrieval
     self.checkScope('esi-corporations.read_blueprints.v1');
     self.requestByPrefix("{ $.corporationID }/blueprints/", :$datasource);
   }
 
   method getContacts(:$datasource) {
-    elf.checkScope('esi-corporations.read_contacts.v1');
-    self.requestByPrefix("{ $.corporationID }/contacts/", :$datasousrce);
+    self.checkScope('esi-corporations.read_contacts.v1');
+    self.requestByPrefix("{ $.corporationID }/contacts/", :$datasource);
   }
 
   method getContactLabels(:$datasource) {
-    elf.checkScope('esi-corporations.read_contacts.v1');
-    self.requestByPrefix("{ $.corporationID }/contacts/labels/", :$datasousrce);
+    self.checkScope('esi-corporations.read_contacts.v1');
+    self.requestByPrefix("{ $.corporationID }/contacts/labels/", :$datasource);
   }
 
   method getContainerLogs(:$datasource) {
     # cw: [Optional] add single page retrieval
     self.checkScope('esi-corporations.read_container_logs.v1');
-    self.requestByPrefix("{ $.corporationID }/containers/logs/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/containers/logs/", :$datasource);
   }
 
   method getContracts(:$datasource) {
@@ -108,14 +108,14 @@ class WebService::EveOnline::ESI::Corporation {
 		die "<contractID> must be an Integer" unless $cid ~~ Int;
 
 		self.checkScope('esi-contracts.read_corporation_contracts.v1');
-		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/bids/");
+		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/bids/", :$datasource);
 	}
 
 	method getContractItems($cid, :$datasource) {
 		die "<contractID> must be an Integer" unless $cid ~~ Int;
 
 		self.checkScope('esi-contracts.read_corporation_contracts.v1');
-		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/items/");
+		self.requestByPrefix("{ $.corporationID }/contracts/{ $cid }/items/", :$datasource);
 	}
 
   method getCustomsOffices(:$datasource) {
@@ -125,7 +125,7 @@ class WebService::EveOnline::ESI::Corporation {
 
   method getDivisions(:$datasource) {
     self.checkScope('esi-corporations.read_divisions.v1');
-    self.requestByPrefix("{ $.corporationID }/divisions/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/divisions/", :$datasource);
   }
 
   method getFacilities(:$datasource) {
@@ -135,7 +135,7 @@ class WebService::EveOnline::ESI::Corporation {
 
   method getIcon($corpId?, :$datasource) {
     my $cid = self!getCorpId($corpId);
-    self.requestByPrefix("{ $cid }/icons/", :$datasousrce);
+    self.requestByPrefix("{ $cid }/icons/", :$datasource);
   }
 
   method getRecentKillmails(:$datasource) {
@@ -182,7 +182,7 @@ class WebService::EveOnline::ESI::Corporation {
     die "<observerID> must be an Integer." unless $oid ~~ Int;
 
     self.checkScope('esi-industry.read_corporation_mining.v1');
-    self.requestByPrefix("{ $.corporationID }/mining/observers/{ $oid }", :$datasource);
+    self.requestByPrefix("{ $.corporationID }/mining/observers/{ $oid }/", :$datasource);
   }
 
   method getMembers(:$datasource) {
@@ -207,42 +207,42 @@ class WebService::EveOnline::ESI::Corporation {
 
   method getRoles(:$datasource) {
     self.checkScope('esi-corporations.read_corporation_membership.v1');
-    self.requestByPrefix("{ $.corporationID }/roles/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/roles/", :$datasource);
   }
 
   method getRoleHistory(:$datasource) {
     self.checkScope('esi-corporations.read_corporation_membership.v1');
-    self.requestByPrefix("{ $.corporationID }/roles/history/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/roles/history/", :$datasource);
   }
 
   method getShareHolders(:$datasource) {
     self.checkScope('esi-wallet.read_corporation_wallets.v1');
-    self.requestByPrefix("{ $.corporationID }/shareholders/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/shareholders/", :$datasource);
   }
 
   method getStandings(:$datasource) {
     self.checkScope('esi-corporations.read_standings.v1');
-    self.requestByPrefix("{ $.corporationID }/standings/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/standings/", :$datasource);
   }
 
   method getStarbases(:$datasource) {
     self.checkScope('esi-corporations.read_starbases.v1');
-    self.requestByPrefix("{ $.corporationID }/starbases/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/starbases/", :$datasource);
   }
 
-  method getStarbases($starbase_id, :$datasource) {
+  method getStarbase($starbase_id, :$datasource) {
     self.checkScope('esi-corporations.read_starbases.v1');
-    self.requestByPrefix("{ $.corporationID }/starbases/{ $starbase_id }", :$datasource);
+    self.requestByPrefix("{ $.corporationID }/starbases/{ $starbase_id }/", :$datasource);
   }
 
   method getStructures(:$datasource) {
     self.checkScope('esi-corporations.read_structures.v1');
-    self.requestByPrefix("{ $.corporationID }/structures/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/structures/", :$datasource);
   }
 
   method getTitles(:$datasource) {
     self.checkScope('esi-corporations.read_titles.v1');
-    self.requestByPrefix("{ $.corporationID }/titles/", :$datasousrce);
+    self.requestByPrefix("{ $.corporationID }/titles/", :$datasource);
   }
 
   method getNPCorps(:$datasource) {
