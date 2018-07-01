@@ -5,9 +5,10 @@ use WebService::EveOnline::Base;
 class WebService::EveOnline::SSO {
 	use Base64;
 	use Config::INI;
+	use Cro::HTTP::Client;
 	use DateTime::Parse;
 	use HTML::Parser::XML;
-	use HTTP::UserAgent;
+#	use HTTP::UserAgent;
 	use HTTP::Cookies;
 	use JSON::Fast;
 	use XML;
@@ -24,7 +25,7 @@ class WebService::EveOnline::SSO {
 	has %!fieldsInForm;
 	has %.privateData;
 	has $!client;
-	has $!postclient;
+	#has $!postclient;
 	has $!privateFile;
 	has $!privatePrefix;
 	has $!realm;
@@ -45,14 +46,23 @@ class WebService::EveOnline::SSO {
 		:$privatePrefix,
 		:$privateFile
 	) {
-		$!client = HTTP::UserAgent.new(
-			:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
+		#$!client = HTTP::UserAgent.new(
+		#	:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
+		#);
+		#
+		#$!postclient = HTTP::UserAgent.new(
+		#	:max-redirects(0),
+		#	:useragent<WebService::EveOnline v0.0.9 (rakudo)>
+		#);
+
+		$!client = Cro::HTTP::Client.new(
+			:headers([
+				User-agent => 'WebService::EveOnline v0.5.0 (rakudo)'
+			]),
+			:cookie-jar
+			:!follow
 		);
 
-		$!postclient = HTTP::UserAgent.new(
-			:max-redirects(0),
-			:useragent<WebService::EveOnline v0.0.9 (rakudo)>
-		);
 
 		$!privatePrefix = $privatePrefix // DEFAULT_HOME;
 		$!privateFile = "{ $!privatePrefix }/{ $privateFile // 'privateData' }";
@@ -99,43 +109,56 @@ class WebService::EveOnline::SSO {
 		 	UserName 			    => %.privateData<_><username>,
 		 	Password			    => %.privateData<_><password>,
 		 	RememberMe		    => 'false',
-			realm				      => %.privateData<_><realm>
+			#realm				      => %.privateData<_><realm>
 		};
-		$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
+		#$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
+
+		for $!xmldoc.elements(:TAG<input>, :type<hidden>, :RECURSE(100)).List -> $hf {
+			$form_data{$hf<name>} = $hf<value>;
+		}
 
 		my $formUrl = @forms[0]<action>;
 		die "\nNo ACTION destionation provided in <FORM> tag."
 			unless $formUrl.defined;
 
-		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
+		unless $formUrl ~~ /^ 'http' s? '://' / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
 			$formUrl = "{ PREFIX }{ $formUrl }";
 		}
 
-		my $url;
 		my $response;
-
 		{
-			$response = $!postclient.post($formUrl, $form_data);
+			$response = await $!client.post(
+				$formUrl,
+				content-type	=> 'application/x-www-form-urlencoded',
+				body					=> $form_data
+			);
 
 			# If we get a redirect from the POST, preserve the response.
+			# cw: Update for Cro
 			CATCH {
 				when X::HTTP::Response { $response = .response; }
 			}
 		}
 
-		my @cookies = getCookies($response);
-		for @cookies -> $c {
-			$!client.cookies.push-cookie($c);
-			$!postclient.cookies.push-cookie($c);
-		}
+		# my @cookies = getCookies($response);
+		# for @cookies -> $c {
+		# 	"C{$++}: { $c.gist }".say;
+		#
+		# 	$!client.cookies.push-cookie($c);
+		# 	$!postclient.cookies.push-cookie($c);
+		# }
+
+		$response.cookies.gist.say;
+		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		# cw: Not optimal, but this should generally work for the servers
 		#     we connect to.
-		$url = ~$response.header.field('Location').values;
+		my $url = $response.header('Location').values;
 
 		# cw: Attempt to pull info from $response.content
-		if !$url.defined && $response.has-content {
+		my $content = await $response.body;
+		if !$url.defined && $content ~~ Str && $content.chars {
 			$!xmldoc = HTML::Parser::XML.new.parse($response.content);
 			if $!xmldoc ~~ XML::Document {
 				my @links = $!xmldoc.elements(:TAG<a>, :RECURSE(100));
@@ -148,7 +171,7 @@ class WebService::EveOnline::SSO {
 
 		die "\nRedirect provided no valid destination\n" unless $url.defined;
 
-		unless $url ~~ /^^ https\:\/\/ / {
+		unless $url ~~ /^^ 'https://' / {
 			# cw: MUST be HTTPS at this point.
 		  $url = '/' ~ $url unless $url.substr(0, 1) eq '/';
 			$url = "{ PREFIX }{ $url }"
@@ -160,22 +183,27 @@ class WebService::EveOnline::SSO {
 		#say "U: $url";
 
 		{
-			$response = $!client.get($url);
+			$response = await $!client.get($url, :follow);
 
 			CATCH {
+				# cw: Update for Cro
 				when X::HTTP::NoResponse {
 					$response = .response;
 				}
 			}
 		}
 
-		die "HTTP request to '$url' failed!" unless $response.is-success;
+		die "HTTP request to '$url' failed!" unless 200 >= $response.status < 300;
 
-		@cookies = getCookies($response);
-		for @cookies -> $c {
-			$!client.cookies.push-cookie($c);
-			$!postclient.cookies.push-cookie($c);
-		}
+		# @cookies = getCookies($response);
+		# for @cookies -> $c {
+		# 	"C{$++}: { $c.gist }".say;
+		#
+		# 	$!client.cookies.push-cookie($c);
+		# 	$!postclient.cookies.push-cookie($c);
+		# }
+
+		(await $response.body).say;
 
 		$response;
 	}
@@ -225,7 +253,7 @@ class WebService::EveOnline::SSO {
 
 		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
 		my $formUrl = @forms[0]<action>;
-		unless $formUrl ~~ /^ 'http' s? \:\/\/ / {
+		unless $formUrl ~~ /^ 'http' s? '://' / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
 			$formUrl = "{ PREFIX }{ $formUrl }";
 		}
@@ -241,7 +269,7 @@ class WebService::EveOnline::SSO {
 
 		my $response;
 		{
-			$response = $!postclient.post($formUrl, $form_data);
+#			$response = $!postclient.post($formUrl, $form_data);
 
 			CATCH {
 				when X::HTTP::Response { $response = .response }
@@ -260,11 +288,11 @@ class WebService::EveOnline::SSO {
 		#	say "Header: $k => $respHash{$k}";
 		#}
 
-		my @cookies = getCookies($response);
-		for @cookies -> $cookie {
-			$!client.cookies.push-cookie($cookie);
-			$!postclient.cookies.push-cookie($cookie);
-		}
+		# my @cookies = getCookies($response);
+		# for @cookies -> $cookie {
+		# 	$!client.cookies.push-cookie($cookie);
+		# 	$!postclient.cookies.push-cookie($cookie);
+		# }
 
 		say "Using character '{ $cName }' (#{ $cid })...";
 
@@ -272,11 +300,11 @@ class WebService::EveOnline::SSO {
 	}
 
 	method !getBearerToken($form_data) {
-		$!postclient.post(
-			"{ PREFIX }/oauth/token",
-			$form_data,
-			:Authorization("Basic { self!encodeAuth }"),
-		);
+		# $!postclient.post(
+		# 	"{ PREFIX }/oauth/token",
+		# 	$form_data,
+		# 	:Authorization("Basic { self!encodeAuth }"),
+		# );
 	}
 
 	method !setTokenData($newTokenData) {
@@ -313,13 +341,17 @@ class WebService::EveOnline::SSO {
 		my $url = "{ PREFIX }/oauth/authorize?{ $p }";
 		my $response;
 
-		$response = $!client.get($url);
+		$response = await $!client.get($url, :follow);
 		# cw: Should throw an exception, instead.
-		die "HTTP request to '$url' failed!" unless $response.is-success;
+		die "HTTP request to '$url' failed!" unless 200 >= $response.status < 300;
+
+		$!client.headers.push(
+			|$response.headers.grep( *.name eq 'Request-Context' )
+		);
 
 		my $tokenCode;
 
-		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
+		$!xmldoc = HTML::Parser::XML.new.parse(await $response.body);
 		my @fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>);
 		my @sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
@@ -352,8 +384,6 @@ class WebService::EveOnline::SSO {
 		if $loc ~~ / code\= (<-[ & ]>+) / {
 			$tokenCode = $/[0].Str;
 		}
-
-		$response.content.say;
 
 		# cw: Should be an exception
 		die "Could not find tokenCode in response data" unless $tokenCode;
