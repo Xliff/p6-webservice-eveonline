@@ -487,7 +487,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 				:section('priceCheck')
 			);
 			$sso.getToken;
-			$api = WebService::EveOnline::ESI::Market.new($sso, :latest);
+			$api = WebService::EveOnline::ESI::Market.new($sso);
 		}
 	}
 
@@ -495,7 +495,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 	if %extras<inv> {
 		die "--inv option must be one of: char, corp or all."
 			unless %extras<inv> eq <char corp all>.any;
-		$asset-api = WebService::EveOnline::ESI::Assets.new($sso, :latest)
+		$asset-api = WebService::EveOnline::ESI::Assets.new($sso)
 	}
 	# Process slurped options.
 	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;

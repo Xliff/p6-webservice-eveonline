@@ -82,6 +82,10 @@ class WebService::EveOnline::SSO {
 		$.tokenData.defined ?? $.tokenData<characterID> !! Nil;
 	}
 
+	method !is-success($r) {
+		200 >= $r.status < 300;
+	}
+
 	method !encodeAuth {
 		encode-base64(
 			#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
@@ -148,8 +152,6 @@ class WebService::EveOnline::SSO {
 		# 	$!client.cookies.push-cookie($c);
 		# 	$!postclient.cookies.push-cookie($c);
 		# }
-
-		$response.cookies.gist.say;
 		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		# cw: Not optimal, but this should generally work for the servers
@@ -193,7 +195,7 @@ class WebService::EveOnline::SSO {
 			}
 		}
 
-		die "HTTP request to '$url' failed!" unless 200 >= $response.status < 300;
+		die "HTTP request to '$url' failed!" unless self!is-success($response);
 
 		# @cookies = getCookies($response);
 		# for @cookies -> $c {
@@ -202,8 +204,6 @@ class WebService::EveOnline::SSO {
 		# 	$!client.cookies.push-cookie($c);
 		# 	$!postclient.cookies.push-cookie($c);
 		# }
-
-		(await $response.body).say;
 
 		$response;
 	}
@@ -269,7 +269,11 @@ class WebService::EveOnline::SSO {
 
 		my $response;
 		{
-#			$response = $!postclient.post($formUrl, $form_data);
+			$response = await $!client.post(
+				$formUrl,
+				content-type	=> 'application/x-www-form-urlencoded',
+				body          => $form_data
+			);
 
 			CATCH {
 				when X::HTTP::Response { $response = .response }
@@ -281,7 +285,7 @@ class WebService::EveOnline::SSO {
 		#
 		#     The problem here is that the cookes are MANGLED in the
 		#     header.
-		my $respHash = $response.header.hash;
+		#my $respHash = $response.header.hash;
 
 		# cw: Throw behind DEBUG parameter.
 		#for $respHash.keys -> $k {
@@ -300,11 +304,20 @@ class WebService::EveOnline::SSO {
 	}
 
 	method !getBearerToken($form_data) {
-		# $!postclient.post(
-		# 	"{ PREFIX }/oauth/token",
-		# 	$form_data,
-		# 	:Authorization("Basic { self!encodeAuth }"),
-		# );
+		# $!client.post(
+		#  	"{ PREFIX }/oauth/token",
+		#  	$form_data,
+	 	#  	:Authorization("Basic { self!encodeAuth }"),
+	  # );
+		await $!client.post(
+	  	"{ PREFIX }/oauth/token",
+			content-type	=> 'application/x-www-form-urlencoded',
+	  	body          => $form_data,
+			auth          => {
+				username => %!privateData{$!section}<client_id>,
+				password => %!privateData{$!section}<secret_id>
+			}
+	  );
 	}
 
 	method !setTokenData($newTokenData) {
@@ -343,7 +356,7 @@ class WebService::EveOnline::SSO {
 
 		$response = await $!client.get($url, :follow);
 		# cw: Should throw an exception, instead.
-		die "HTTP request to '$url' failed!" unless 200 >= $response.status < 300;
+		die "HTTP request to '$url' failed!" unless self!is-success($response);
 
 		$!client.headers.push(
 			|$response.headers.grep( *.name eq 'Request-Context' )
@@ -366,7 +379,7 @@ class WebService::EveOnline::SSO {
 				%!fieldsInForm<Password> 			&&
 				%!fieldsInForm<RememberMe>;
 
-		$!xmldoc = HTML::Parser::XML.new.parse($response.content);
+		$!xmldoc = HTML::Parser::XML.new.parse(await $response.body);
 		@fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>);
 		@sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
@@ -380,7 +393,7 @@ class WebService::EveOnline::SSO {
 
 		# At this point, the redirect should contain a code parameter.
 		# Search for it.
-		my $loc = $response.header.field('Location') // '';
+		my $loc = $response.header('Location') // '';
 		if $loc ~~ / code\= (<-[ & ]>+) / {
 			$tokenCode = $/[0].Str;
 		}
@@ -396,15 +409,17 @@ class WebService::EveOnline::SSO {
 
 		# cw: Should be an exception
 		die "Token not retrieved due to unexpected error."
-			unless $response.is-success;
+			unless self!is-success($response);
 
 		# cw: Maybe add code to output response if a flag is set?
-		my $ct = $response.content-type;
-		die "Invalid response content-type '$ct'. "
+		my $ct = $response.header('Content-Type');
+		die "Invalid response content-type '$ct'."
 			unless $ct ~~ / ^^ 'application/json' /;
 
-		my $jsonObj = from-json($response.content);
-		self!setTokenData($jsonObj);
+		my $json = await $response.body;
+		#$json.say;
+		#my $jsonObj = from-json($json);
+		self!setTokenData($json);
 	}
 
 	method refreshToken {
@@ -415,13 +430,14 @@ class WebService::EveOnline::SSO {
 		my $response = self!getBearerToken($form_data);
 
 		die "Token not refreshed due to unexpected error."
-			unless $response.is-success;
+			unless self!is-success($response);
 
 		# cw: Maybe add code to output response if a flag is set?
 		die "Invalid response content-type."
 			unless $response.field('Content-Type') ~~ /^ 'application/json' /;
 
-		my $jsonObj = from-json($response.content);
+		#my $jsonObj = from-json(await $response.body);
+		my $jsonObj = await $response.body;
 		self!setTokenData($jsonObj);
 	}
 
