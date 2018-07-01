@@ -11,39 +11,22 @@ class WebService::EveOnline::ESI::Base {
 
   has $!type;
 
-  submethod BUILD(:$type) {
+  submethod BUILD(:$type = 'latest') {
     $!type = $type;
   }
 
-  multi method new($sso, $type, :$useragent) {
+  method new($sso, :$type, :$useragent) {
     die "Invalid server parameter. Must be one of 'legacy', 'latest', or 'dev'"
       unless $type eq <latest legacy dev>.any;
 
     self.bless(
       :$sso,
-      :server("esi"),
       :$type,
       :cache_ttl(300),
-      :cache_prefix_add("ESI"),
-      :cache_key('header:expires'),
+      :cache_prefix_add<ESI>,
+      :cache_key<header:expires>,
 			:$useragent
     );
-  }
-
-  multi method new($sso, :$latest, :$legacy, :$dev, :$useragent) {
-		if ($latest, $legacy, $dev).any {
-    	die "Must specify server type as one of :legacy, :latest or :dev"
-      	unless [^^]($latest, $legacy, $dev);
-		}
-
-    my $type = do {
-      when $latest { "latest"; }
-      when $legacy { "legacy"; }
-      when $dev    { "dev";    }
-      default      { "latest"; }
-    };
-
-    self.new($sso, $type, :$useragent);
   }
 
 	method type {
@@ -87,7 +70,7 @@ class WebService::EveOnline::ESI::Base {
 	) {
 		my $url = self!buildUrl($prefix, :$datasource, :%args);
 
-		say "ESI-U [{$method}]: $url";
+		#say "ESI-U [{$method}]: $url";
 
 		do given $method {
 			when RequestMethod::GET {

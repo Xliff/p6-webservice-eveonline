@@ -1,6 +1,8 @@
 use v6.c;
 
 use WebService::EveOnline::ESI::Base;
+use WebService::EveOnline::ESI::Character;
+use WebService::EveOnline::ESI::Corporation;
 
 class WebService::EveOnline::ESI::Market {
 	also is WebService::EveOnline::ESI::Base;
@@ -10,13 +12,14 @@ class WebService::EveOnline::ESI::Market {
 
 	submethod BUILD {
 		if self.sso.defined {
-			$!char-api = WebService::EveOnline::ESI::Character(self.sso);
-			$!corp-api = WebService::EveOnline::ESI::Corporation(self.sso);
+			my $sso = self.sso;
+			$!char-api = WebService::EveOnline::ESI::Character.new(:$sso);
+			$!corp-api = WebService::EveOnline::ESI::Corporation.new(:$sso);
 		}
 	}
 
   submethod TWEAK {
-    self.appendPrefix("{ self.type }/markets/");
+    self.appendPrefix("/{ self.type }/markets/");
   }
 
 	method new(:$sso) {

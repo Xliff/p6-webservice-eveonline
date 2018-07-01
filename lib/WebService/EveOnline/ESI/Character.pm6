@@ -11,8 +11,16 @@ class WebService::EveOnline::ESI::Character {
     self.appendPrefix("/{ self.type }/characters/");
   }
 
+	method new(:$sso) {
+		self.bless(:$sso);
+	}
+
 	method character-id {
 		self.sso.characterID;
+	}
+
+	method corporation-id {
+		self.getInformation()<corporation_id>;
 	}
 
 	method addContacts(@contacts, :$datasource) {

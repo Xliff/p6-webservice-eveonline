@@ -87,7 +87,7 @@ sub quickLook(:$typeID) {
 	}
 	for %regionName.keys -> $r {
 		say "\t\t...in { %regionName{ $r } } (#{ $r })";
-		my $rawdata = $api.marketRegionOrders(
+		my $rawdata = $api.getRegionOrders(
 			$r, :type_id($typeID.Int), :order_type('sell')
 		);
 
@@ -357,7 +357,7 @@ sub getShoppingCart {
 
 	for %manifest.kv -> $k, $v {
 		my $count := $v<count>;
-		my $minVol= $count / 100;
+		my $minVol= %options<minvol> // ($count * %options<minper>);
 		my $idx = 0;
 
 		while ($count > 0 && $idx < %market{$k}<sell>.elems ) {
@@ -403,7 +403,7 @@ sub commaize($_v) {
 sub getIDs(Int $typeID, $m = 1) {
 	my $me = '';
 	$me = "(ME = { %options<me> * 100 }) " if %options<me>.defined;
-	say "Fetching blueprint data {$me}(type_id = {$typeID}) ...";
+	say "Fetching blueprint data { $me }(type_id = { $typeID }) ...";
 
 	# cw: Would it be worth it to cache any of this?
 	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
@@ -487,7 +487,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 				:section('priceCheck')
 			);
 			$sso.getToken;
-			$api = WebService::EveOnline::ESI::Market.new($sso);
+			$api = WebService::EveOnline::ESI::Market.new(:$sso, :type<latest>);
 		}
 	}
 
@@ -495,10 +495,28 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 	if %extras<inv> {
 		die "--inv option must be one of: char, corp or all."
 			unless %extras<inv> eq <char corp all>.any;
-		$asset-api = WebService::EveOnline::ESI::Assets.new($sso)
+		$asset-api = WebService::EveOnline::ESI::Assets.new(:$sso, :type<latest>)
 	}
 	# Process slurped options.
 	%options<me> = %extras<me> * 0.01 if %extras<me>.defined;
+
+	die "--minvol and --minper options cannot be used together"
+		if %extras<minper>.defined && %extras<minvol>.defined;
+
+	if %extras<minvol>.defined {
+		die "--minvol must be an integer representing minimum order quantity"
+			unless %extras<minvol> ~~ Int;
+		%options<minvol> = %extras<minvol>;
+	}
+
+	if %extras<minper>.defined {
+		die qq:to/DIE/
+--minper must be a integer from 1 to 100 representing the minimum PERCENTAGE
+  of each requested item. Any orders less than this value are not considered.
+DIE
+		unless %extras<minper> ~~ Int && 1 <= %extras<minper> <= 100;
+	}
+	%options<minper> = (%extras<minper> / 100) // 0.01;
 
 	# Preload the entire item id/name database;
 	# May want to rethink this if it takes too long.
@@ -660,6 +678,12 @@ Extras:
 			corp - Check only your corporation's inventory
 			       (Requires proper corporation access)
 		  all  - Check all inventories that you have access to
+
+  --minvol   Sets the minimum volume for each order. Default value is 1% of the
+	           requested amount
+
+	--minper   Sets the minimum volume (by percentage) of each order. Default
+	           value is 1% of the requested amount.
 
 	Shortcuts for item list:
 	Adding :B to the end of the item implies you want a blueprint.

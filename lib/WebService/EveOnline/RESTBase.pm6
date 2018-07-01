@@ -25,7 +25,7 @@ class WebService::EveOnline::RESTBase {
 		:$sso, :$server,
 	) {
 		$!sso = $sso;
-		$!server = self.getServer($server);
+		$!server = self.getServer($server // 'esi');
 		$!request-prefix = "{ PREFIX{$!server} }";
 	}
 
@@ -123,7 +123,7 @@ class WebService::EveOnline::RESTBase {
 				:json
 			);
 
-			say "U{$page}: $curURL";
+			#say "U{$page}: $curURL";
 
 			# cw: Do we limit paged data? If so, how?
 			$retVal //= $data;
