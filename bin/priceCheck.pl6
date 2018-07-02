@@ -516,7 +516,7 @@ sub actualMAIN(*@items, :$sqlite, :%extras) {
 DIE
 		unless %extras<minper> ~~ Int && 1 <= %extras<minper> <= 100;
 	}
-	%options<minper> = (%extras<minper> / 100) // 0.01;
+	%options<minper> = (%extras<minper> // 1) / 100;
 
 	# Preload the entire item id/name database;
 	# May want to rethink this if it takes too long.
