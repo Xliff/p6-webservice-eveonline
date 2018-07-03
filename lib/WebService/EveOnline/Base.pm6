@@ -53,6 +53,7 @@ class WebService::EveOnline::Base {
 		#));
 
 		$!http_client = Cro::HTTP::Client.new(
+      :http<1.1>,
 			headers => [
 				User-agent => DEFAULT_UA
 			]
