@@ -178,7 +178,7 @@ class WebService::EveOnline::Base {
 			}
 
 			# XML/JSON
-			when Hash {
+			when Hash | Array {
 				$retObj<data> = $content;
 			}
 
@@ -311,7 +311,7 @@ class WebService::EveOnline::Base {
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
 		$response = do given $method {
 			when RequestMethod::GET {
-				$!http_client.get($url, :headers($headers.pairs));
+				await $!http_client.get($url, :headers([ $headers.pairs ]));
 			}
 
 			#when RequestMethod::POST {
@@ -319,7 +319,7 @@ class WebService::EveOnline::Base {
 			#}
 
 			when RequestMethod::DELETE {
-				$!http_client.delete($url, :headers($headers.pairs));
+				await $!http_client.delete($url, :headers([ $headers.pairs ]));
 			}
 
 			#when RequestMethod::PUT {

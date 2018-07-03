@@ -79,7 +79,7 @@ class WebService::EveOnline::SSO {
 	}
 
 	method characterID {
-		$.tokenData.defined ?? $.tokenData<characterID> !! Nil;
+		$!characterID;
 	}
 
 	method !is-success($r) {
