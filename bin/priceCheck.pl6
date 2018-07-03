@@ -385,11 +385,11 @@ sub getShoppingCart {
 	%cart;
 }
 
-# cw: Really need a module to say "comma-ize this number"
+# cw: TODO - Really need a module to say "comma-ize this number"
 sub commaize($_v) {
 	my $length = 18;
 
-	$_v ~~ / '.' (\d ** 2) /;
+	my $m = $_v.Str ~~ / '.' (\d ** 1..2) /;
 	my $decimal = $/[0];
 	$decimal ~= '0' if $decimal && $decimal.chars < 2;
 

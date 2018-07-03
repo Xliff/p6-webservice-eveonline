@@ -1,6 +1,6 @@
 use v6.c;
 
-use HTTP::Request;
+#use HTTP::Request;
 
 use WebService::EveOnline::Base;
 use WebService::EveOnline::RESTBase;
@@ -73,12 +73,13 @@ class WebService::EveOnline::ESI::Base {
 		#say "ESI-U [{$method}]: $url";
 
 		do given $method {
-			when RequestMethod::GET {
+			when RequestMethod::GET | RequestMethod::DELETE {
 		    self.makeRequest($url, :$method);
 			}
 
-			when RequestMethod::POST {
-				#HTTP::Request.new(POST => $url, |%header);
+			default {
+				# Switch to proper alternative request for PUT and POST
+				Nil;
 			}
 		}
   }
