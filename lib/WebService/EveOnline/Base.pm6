@@ -158,7 +158,7 @@ class WebService::EveOnline::Base {
 	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {
 		#my $p5 = Inline::Perl5.new;
 
-		#$!last-response = $response;
+		$!last-response = $response;
 
 		#$p5.use('XML::Hash::XS');
 

@@ -204,14 +204,13 @@ DIE
 		);
 	}
 
-	method getAssets (Int :$page = 1, :$datasource) {
+	method getAssets (:$datasource) {
 		self.checkScope('esi-assets.read_assets.v1');
 
-		# This may not be necessary after the move to CRO::Http
-		my $url = "{ self.sso.characterID }/assets/?token=" ~ self.sso.tokenData<access_token>;
-		$url ~= "&page={$page}" if $page;
+		# Hold this until we know if :$pages will stick around.
+		my $url = "{ self.sso.characterID }/assets/";
 
-		self.requestByPrefix($url, :$datasource);
+		self.requestByPrefix($url, :$datasource, :paged);
 	}
 
 	method getAssetLocations (@item_ids, :$datasource) {

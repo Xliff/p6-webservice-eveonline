@@ -86,6 +86,34 @@ class WebService::EveOnline::RESTBase {
 		makeRequestStatic($url);
 	}
 
+	method makePagedRequest(
+		WebService::EveOnline::RESTBase:D:
+		$url,
+		:$method,
+		:$headers,
+		:$cache_ttl,
+		:$force
+	) {
+		my $retVal = self.makeRequest($url, :$method, :$headers, :$cache_ttl, :$force);
+		if $retVal<__cache__><pages>.defined {
+			my $page = 2;
+			my $maxPage = $retVal<__cache__><pages>;
+			loop {
+				# This is dumb.
+				say "Page: $page";
+				$retVal<data>.push: |(self.makeRequest(
+					$url ~ "?page={$page}",
+					:$method,
+					:$headers,
+					:$cache_ttl,
+					:$force
+				)<data>);
+				last if $page++ >= $maxPage;
+			}
+		}
+		$retVal;
+	}
+
 	# cw: Determine if paged requests have a universal handling method.
 	#     then see the best way to interface it. Do we allow for
 	#     random page access? If so, how?
@@ -105,75 +133,53 @@ class WebService::EveOnline::RESTBase {
 	) {
 		$.sso.refreshToken if $.sso.defined && DateTime.now > $.sso.expires;
 
-		my $retVal;
-		my $page = 1;
-		my $curURL = $url;
-		loop {
-			my $data;
+		my $newHeaders = $.sso.getHeader;
+		$newHeaders.append($headers.pairs);
 
-			my $newHeaders = $.sso.getHeader;
-			$newHeaders.append($headers.pairs);
+		my $data = callwith(
+			$url,
+			:$method,
+			:headers($newHeaders),
+			:$cache_ttl,
+			:$force,
+			:json
+		);
 
-			$data = callwith(
-				$curURL,
-				:$method,
-				:headers($newHeaders),
-				:$cache_ttl,
-				:$force,
-				:json
-			);
+		# This will no longer work due to the switch from CREST to ESI
+		#if $data<next>.defined && $data<items>.defined {
+		#	$retVal<items>.push($data<items>);
+		#}
 
-			#say "U{$page}: $curURL";
+		# Eve STAGGER interface - Requires pagination and not a simple call
+		# dependent on values within the response. The loop will need to be
+		# rethought.
+		#
 
-			# cw: Do we limit paged data? If so, how?
-			$retVal //= $data;
+		if self.last-response ~~ (Str, Hash).none {
+			#say "LAST: {$_.is-success} / {$_.code}";
+			my @maxPageVals = do given self.last-response {
+				#use HTTP::UserAgent;
+				use Cro::HTTP::Response;
 
-			# This will no longer work due to the switch from CREST to ESI
-			#if $data<next>.defined && $data<items>.defined {
-			#	$retVal<items>.push($data<items>);
-			#}
+				#when ::('HTTP::Res') {
+				#	$_.field('X-Pages').values;
+				#}
 
-			# Eve STAGGER interface - Requires pagination and not a simple call
-			# dependent on values within the response. The loop will need to be
-			# rethought.
-			#
-
-			if self.last-response ~~ (Str, Hash).none {
-
-					#say "LAST: {$_.is-success} / {$_.code}";
-					my @maxPageVals = do given self.last-response {
-						use HTTP::UserAgent;
-						when ::('HTTP::UserAgent') {
-							$_.field('X-Pages').values;
-						}
-
-						when ::('Cro::HTTP::Client') {
-							$_.header('X-Pages');
-						}
-					}
-					my $maxPage;
-					if @maxPageVals.elems == 1 {
-						$data<__cache__><pages> = $maxPage = @maxPageVals[0];
-						$data<__cache__><url> = $curURL;
-						$curURL = Nil;
-					} elsif @maxPageVals.elems > 1 {
-						say "X-Pages values: " ~ @maxPageVals.gist;
-						die "WTF?! X-Pages is not supposed to have more than one value!";
-					}
-
-					# cw: XXX - Revisit this after move to Cro::HTTP
-					#if $page < $maxPage.Int {
-						# This is dumb.
-					#	$retVal<data>.push: $data<data>;
-					#	$page++;
-					#	$curURL = $url ~ "\&page={$page}";
-					#}
+				when Cro::HTTP::Response {
+					$_.header('X-Pages').List;
+				}
 			}
-
-			last if !$curURL;
+			my $maxPage;
+			if @maxPageVals.elems == 1 {
+				$data<__cache__><pages> = $maxPage = @maxPageVals[0];
+				$data<__cache__><url> = $url;
+			} elsif @maxPageVals.elems > 1 {
+				say "X-Pages values: " ~ @maxPageVals.gist;
+				die "WTF?! X-Pages is not supposed to have more than one value!";
+			}
 		}
 
-		$retVal;
+		$data;
 	}
 
 	method sso {

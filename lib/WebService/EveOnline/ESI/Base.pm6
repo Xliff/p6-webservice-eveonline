@@ -66,6 +66,7 @@ class WebService::EveOnline::ESI::Base {
 		$prefix,
 		:$datasource,
 		:$method = RequestMethod::GET,
+		:$paged,
 		:%args
 	) {
 		my $url = self!buildUrl($prefix, :$datasource, :%args);
@@ -74,7 +75,10 @@ class WebService::EveOnline::ESI::Base {
 
 		do given $method {
 			when RequestMethod::GET | RequestMethod::DELETE {
-		    self.makeRequest($url, :$method);
+		    ($paged // False) ??
+					self.makePagedRequest($url, :$method)
+					!!
+					self.makeRequest($url, :$method);
 			}
 
 			default {
