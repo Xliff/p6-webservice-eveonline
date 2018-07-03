@@ -1,7 +1,7 @@
 use v6.c;
 
-use HTTP::Request;
-use HTTP::UserAgent;
+#use HTTP::Request;
+#use HTTP::UserAgent;
 use JSON::Fast;
 use WebService::EveOnline::Base;
 use WebService::EveOnline::Utils;
@@ -138,10 +138,19 @@ class WebService::EveOnline::RESTBase {
 			# rethought.
 			#
 
-			given self.last-response {
-				when HTTP::Response {
+			if self.last-response ~~ (Str, Hash).none {
+
 					#say "LAST: {$_.is-success} / {$_.code}";
-					my @maxPageVals = $_.field('X-Pages').values;
+					my @maxPageVals = do given self.last-response {
+						use HTTP::UserAgent;
+						when ::('HTTP::UserAgent') {
+							$_.field('X-Pages').values;
+						}
+
+						when ::('Cro::HTTP::Client') {
+							$_.header('X-Pages');
+						}
+					}
 					my $maxPage;
 					if @maxPageVals.elems == 1 {
 						$data<__cache__><pages> = $maxPage = @maxPageVals[0];
@@ -152,13 +161,13 @@ class WebService::EveOnline::RESTBase {
 						die "WTF?! X-Pages is not supposed to have more than one value!";
 					}
 
+					# cw: XXX - Revisit this after move to Cro::HTTP
 					#if $page < $maxPage.Int {
 						# This is dumb.
 					#	$retVal<data>.push: $data<data>;
 					#	$page++;
 					#	$curURL = $url ~ "\&page={$page}";
 					#}
-				}
 			}
 
 			last if !$curURL;
@@ -187,77 +196,77 @@ class WebService::EveOnline::RESTBase {
 		$!request-prefix;
 	}
 
-	method postBody($url, $content, :$content-type, :$bin = False) {
-		my ($request, $response);
-		my $postclient = HTTP::UserAgent.new(
-			:max_redirects(0),
-			:useragent(self.useragent)
-		);
-
-		#say "ESI-P: $url";
-
-		$!sso.refreshToken;
-		my %header = $!sso.getHeader;
-		%header<Content-Type> = $content-type // 'application/json';
-		try {
-			$request = HTTP::Request.new(POST => $url, |%header);
-			$request.add-content($content);
-			$response = $postclient.request($request, :$bin);
-			CATCH {
-				when X::HTTP::Response {
-					$response = .response;
-				}
-			}
-		}
-
-		$response;
-	}
-
-	method post($url, *%extras) {
-		my $postclient = HTTP::UserAgent.new(
-			:max_redirects(0),
-			:useragent(self.useragent)
-		);
-
-		my (@form_data, $content-type);
-		given %extras<ENCODING>.lc {
-			when 'json' {
-				$content-type = 'application/json';
-				for %extras.keys -> $k {
-					next if $k eq $k.uc;
-					# cw: XXX -- need key/value, here.
-					@form_data.push: to-json(%extras{$k});
-				}
-			}
-
-			when 'xml' {
-				$content-type = 'application/xml';
-				for %extras.keys -> $k {
-					next if $k eq $k.uc;
-					# cw ---TODO--- @form_data: to_xml(%extra{$k});
-				}
-			}
-		}
-
-		my $response;
-		$!sso.refreshToken;
-		my %header = $!sso.getHeader;
-		%header<Content-Type> = $content-type;
-		try {
-			$response = $postclient.post(
-				$url,
-				:form_data(@form_data.join('&')),
-				|%header
-			);
-
-			CATCH {
-				when X::HTTP::Response {
-					$response = .response;
-				}
-			}
-		}
-
-		$response;
-	}
+	# method postBody($url, $content, :$content-type, :$bin = False) {
+	# 	my ($request, $response);
+	# 	my $postclient = HTTP::UserAgent.new(
+	# 		:max_redirects(0),
+	# 		:useragent(self.useragent)
+	# 	);
+	#
+	# 	#say "ESI-P: $url";
+	#
+	# 	$!sso.refreshToken;
+	# 	my %header = $!sso.getHeader;
+	# 	%header<Content-Type> = $content-type // 'application/json';
+	# 	try {
+	# 		$request = HTTP::Request.new(POST => $url, |%header);
+	# 		$request.add-content($content);
+	# 		$response = $postclient.request($request, :$bin);
+	# 		CATCH {
+	# 			when X::HTTP::Response {
+	# 				$response = .response;
+	# 			}
+	# 		}
+	# 	}
+	#
+	# 	$response;
+	# }
+	#
+	# method post($url, *%extras) {
+	# 	my $postclient = HTTP::UserAgent.new(
+	# 		:max_redirects(0),
+	# 		:useragent(self.useragent)
+	# 	);
+	#
+	# 	my (@form_data, $content-type);
+	# 	given %extras<ENCODING>.lc {
+	# 		when 'json' {
+	# 			$content-type = 'application/json';
+	# 			for %extras.keys -> $k {
+	# 				next if $k eq $k.uc;
+	# 				# cw: XXX -- need key/value, here.
+	# 				@form_data.push: to-json(%extras{$k});
+	# 			}
+	# 		}
+	#
+	# 		when 'xml' {
+	# 			$content-type = 'application/xml';
+	# 			for %extras.keys -> $k {
+	# 				next if $k eq $k.uc;
+	# 				# cw ---TODO--- @form_data: to_xml(%extra{$k});
+	# 			}
+	# 		}
+	# 	}
+	#
+	# 	my $response;
+	# 	$!sso.refreshToken;
+	# 	my %header = $!sso.getHeader;
+	# 	%header<Content-Type> = $content-type;
+	# 	try {
+	# 		$response = $postclient.post(
+	# 			$url,
+	# 			:form_data(@form_data.join('&')),
+	# 			|%header
+	# 		);
+	#
+	# 		CATCH {
+	# 			when X::HTTP::Response {
+	# 				$response = .response;
+	# 			}
+	# 		}
+	# 	}
+	#
+	#	$response;
+	#}
 
 }

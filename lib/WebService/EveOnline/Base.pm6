@@ -1,19 +1,26 @@
 use v6.c;
 
+use NativeCall;
+
+use DateTime::Parse;
+use HTTP::UserAgent;
+
+# cw: XXX - Problems exist if both of these modules are used at the same time.
+use Cro::HTTP::Client;
+#use Inline::Perl5;
+
+use JSON::Fast;
+
 our enum RequestMethod is export <POST GET PUT DELETE HEAD>;
 
+constant DEFAULT_UA   is export = "WebService::EveOnline/HTTP::UserAgent/perl6";
 constant DEFAULT_HOME is export = "{ %*ENV<HOME> }/.ws_eve";
 
 class WebService::EveOnline::Base {
-	use DateTime::Parse;
-	use HTTP::UserAgent;
-	use Inline::Perl5;
-	use JSON::Fast;
-	use NativeCall;
 
   has $!last-response;
 	has $!response_file;
-	has $.http_client;
+	has $!http_client;
 	has $!cache_prefix;
 	has $!cache_key;
 	has $!cache_date_interp;
@@ -38,12 +45,18 @@ class WebService::EveOnline::Base {
 		:$cache_date_interp,
 		:$cache_name_extract
 	) {
-		$!http_client = HTTP::UserAgent.new(:useragent(
-			$user_agent.defined ??
-				$user_agent
-				!!
-				"WebService::EveOnline/HTTP::UserAgent/perl6"
-		));
+		#$!http_client = HTTP::UserAgent.new(:useragent(
+		#	$user_agent.defined ??
+		#		$user_agent
+		#		!!
+		#
+		#));
+
+		$!http_client = Cro::HTTP::Client.new(
+			headers => [
+				User-agent => DEFAULT_UA
+			]
+		);
 
 		die "<cache_ttl> must be an integer value"
 			unless ! $!cache_ttl.defined || $cache_ttl ~~ Int;
@@ -100,7 +113,7 @@ class WebService::EveOnline::Base {
 	}
 
 	method useragent {
-		$!http_client.useragent;
+		$!http_client.headers('User-agent');
 	}
 
 	method writeResponse(Str $r, Int $ttd) {
@@ -142,35 +155,51 @@ class WebService::EveOnline::Base {
 	}
 
 	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {
-		my $p5 = Inline::Perl5.new;
+		#my $p5 = Inline::Perl5.new;
 
-		$!last-response = $response;
+		#$!last-response = $response;
 
-		$p5.use('XML::Hash::XS');
+		#$p5.use('XML::Hash::XS');
 
 		my $retObj;
-		given $response {
+
+		my $content;
+		$content = await $response.body if $response ~~ Cro::HTTP::Response;
+		given $content {
+			# With Cro::HTTP, this will only occur if there is HTML content.
 			when Str {
 				$retObj<data> = $json.defined ??
-					from-json($response) !!
-					$p5.call('xml2hash', $response);
-
+					from-json($content)
+					!!
+					# XML Deprecated in early 2018
+					#$p5.call('xml2hash', $usedResponse);
+					Nil;
 				#say "R: {$response}";
 			}
 
-			when HTTP::Response {
-				if $response.has-content {
-					$retObj<data> = $json.defined ??
-						from-json($response.content) !!
-						$p5.call('xml2hash', $response.content);
+			# XML/JSON
+			when Hash {
+				$retObj<data> = $content;
+			}
 
-					#say "R: {$response.content}";
-				} elsif ! $response.has-content {
-					#say "No response content";
+			# ---------  DEPRECATED -----------
+			# when HTTP::Response {
+			# 	if $response.has-content {
+			# 		$retObj<data> = $json.defined ??
+			# 			from-json($response.content) !!
+			# 			$p5.call('xml2hash', $response.content);
+			#
+			# 		#say "R: {$response.content}";
+			# 	} elsif ! $response.has-content {
+			# 		#say "No response content";
+			#
+			# 		return;
+			#
+			# 	}
+			# }
 
-					return;
-
-				}
+			default {
+				die "Unknown response type result: { $_.^name }";
 			}
 		}
 
@@ -186,12 +215,13 @@ class WebService::EveOnline::Base {
 				# cw: -YYY- Error checking?!?
 				$ttd =  $cache_key ~~ /^^ 'header:' (.+)/ ??
 				  # cw: This is problematic. Array may not always split on the DOW.
-					do {
-						given $response.header.field(~$0).values {
-							when Str   { $_ }
-							when Array { $_.join(', ') }
-						}
-					}
+					# do {
+					# 	given $response.header.field(~$0).values {
+					# 		when Str   { $_ }
+					# 		when Array { $_.join(', ') }
+					# 	}
+					# }
+					$response.header($/[0].Str)
 				  !!
 					($retObj{$cache_key}:v);
 
@@ -218,13 +248,16 @@ class WebService::EveOnline::Base {
 			# cw: ...the data cached is the retrieved response.
 			#say "RT: { $response.^name }";
 			#say "IS: { $response.is-success }";
-			self.writeResponse($response.content, $ttd)
-				if $response ~~ HTTP::Response && $response.is-success;
+			if $response.status ~~ 200..^300 {
+				self.writeResponse(await $response.body-text, $ttd)
+					#if $response ~~ HTTP::Response && $response.is-success;
+					if $response ~~ ::('Cro::HTTP::Response');
 
-			$retObj<__cache__> = {
-				file 	=> $!response_file,
-				expires	=> $!response_file.IO.modified
-			} if $response !~~ HTTP::Response || $response.is-success;
+					$retObj<__cache__> = {
+						file 	=> $!response_file,
+						expires	=> $!response_file.IO.modified
+					}
+			}
 		}
 
 		return $retObj;
@@ -278,20 +311,20 @@ class WebService::EveOnline::Base {
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
 		$response = do given $method {
 			when RequestMethod::GET {
-				$!http_client.get($url, :header($headers));
+				$!http_client.get($url, :headers($headers.pairs));
 			}
 
-			when RequestMethod::POST {
-				$!http_client.post($url, :form($form), :header($headers));
-			}
+			#when RequestMethod::POST {
+			#	$!http_client.post($url, :form($form), :header($headers));
+			#}
 
 			when RequestMethod::DELETE {
-				$!http_client.delete($url, :header($headers));
+				$!http_client.delete($url, :headers($headers.pairs));
 			}
 
-			when RequestMethod::PUT {
-				$!http_client.put($url, :form($form), :header($headers));
-			}
+			#when RequestMethod::PUT {
+			#	$!http_client.put($url, :form($form), :header($headers));
+			#}
 		};
 
 		self.handleResponse(
