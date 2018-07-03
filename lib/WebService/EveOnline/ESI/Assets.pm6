@@ -30,12 +30,12 @@ class WebService::EveOnline::ESI::Assets {
 		$!corp-api.corporation-id;
 	}
 
-  method getCharacterAssets (:$datasource) {
-		$!char-api.getAssets(:$datasource);
+  method getCharacterAssets (:$filter, :$datasource) {
+		$!char-api.getAssets(:$filter, :$datasource);
 	}
 
-	method getCorporationAssets (:$datasource) {
-		$!corp-api.getAssets(:$datasource);
+	method getCorporationAssets (:$filter, :$datasource) {
+		$!corp-api.getAssets(:$filter, :$datasource);
 	}
 
 	method getCharacterAssetLocations (@item_ids, :$datasource) {

@@ -42,9 +42,17 @@ class WebService::EveOnline::ESI::Corporation {
     self.requestByPrefix("{ $cid }/alliancehistory/");
   }
 
-  method getAssets (:$datasource) {
+  method getAssets (:$filter, :$datasource) {
+    die qq:to/DIE/
+<filter> must be a code block, which can filter on one or a combination of
+the following traits:
+  is_singleton, item_id, location_flag, location_id, location_type, type_id
+  or quantity
+DIE
+      unless $filter ~~ (Block, Routine, WhateverCode).any;
+      
     self.checkScope('esi-assets.read_corporation_assets.v1');
-    self.requestByPrefix("{ $!corporationID }/assets/", :$datasource);
+    self.requestByPrefix("{ $!corporationID }/assets/", :$filter, :$datasource);
   }
 
   method getAssetLocations (@item_ids, :$datasource) {
