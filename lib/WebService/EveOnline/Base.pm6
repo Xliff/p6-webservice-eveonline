@@ -134,7 +134,7 @@ class WebService::EveOnline::Base {
 			}
 		}
 
-		#say "WR: Writing to {$!response_file}";
+		say "WR: Writing to {$!response_file}";
 
 		my $h = $!response_file.IO.open(:w, :bin);
 		die "Cannot open cache file '{ $!response_file }' for writing"
@@ -155,16 +155,17 @@ class WebService::EveOnline::Base {
 		#say "File modification time set to {$ttd.Str}";
 	}
 
-	method handleResponse($response, $json, :$cache_ttl, :$cache_key) {
+	method handleResponse(
+    $response,
+    $json,
+    :$cache_ttl = $!cache_ttl,
+    :$cache_key = $!cache_key
+  ) {
 		#my $p5 = Inline::Perl5.new;
-
-		$!last-response = $response;
-
 		#$p5.use('XML::Hash::XS');
+    $!last-response = $response;
 
-		my $retObj;
-
-		my $content;
+		my ($retObj, $content);
 		$content = await $response.body if $response ~~ Cro::HTTP::Response;
 		given $content {
 			# With Cro::HTTP, this will only occur if there is HTML content.
@@ -228,7 +229,7 @@ class WebService::EveOnline::Base {
 
 				if $ttd !~~ Int {
 					# Parse date using subclass defined function.
-					if ($!cache_date_interp.defined) {
+					if $!cache_date_interp.defined {
 						$ttd = $!cache_date_interp($ttd);
 					} else {
 						# cw: If all else fails, try DateTime::Parse
@@ -252,12 +253,12 @@ class WebService::EveOnline::Base {
 			if $response.status ~~ 200..^300 {
 				self.writeResponse(await $response.body-text, $ttd)
 					#if $response ~~ HTTP::Response && $response.is-success;
-					if $response ~~ ::('Cro::HTTP::Response');
+					if $response ~~ Cro::HTTP::Response;
 
-					$retObj<__cache__> = {
-						file 	=> $!response_file,
-						expires	=> $!response_file.IO.modified
-					}
+				$retObj<__cache__> = {
+					file 	=> $!response_file,
+					expires	=> $!response_file.IO.modified
+				}
 			}
 		}
 
@@ -310,22 +311,32 @@ class WebService::EveOnline::Base {
 		}
 
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
-		$response = do given $method {
+		$response = await do given $method {
 			when RequestMethod::GET {
-				await $!http_client.get($url, :headers([ $headers.pairs ]));
+				$!http_client.get($url, :headers([ $headers.pairs ]));
 			}
 
-			#when RequestMethod::POST {
-			#	$!http_client.post($url, :form($form), :header($headers));
-			#}
+			when RequestMethod::POST {
+		    $!http_client.post(
+          $url,
+          content-type => 'application/x-www-form-urlencoded',
+                  body => $form,
+               headers => [ $headers.pairs ]
+        );
+			}
 
 			when RequestMethod::DELETE {
-				await $!http_client.delete($url, :headers([ $headers.pairs ]));
+				$!http_client.delete($url, :headers([ $headers.pairs ]));
 			}
 
-			#when RequestMethod::PUT {
-			#	$!http_client.put($url, :form($form), :header($headers));
-			#}
+			when RequestMethod::PUT {
+				$!http_client.put(
+          $url,
+          content-type => 'application/x-www-form-urlencoded',
+                  body => $form,
+               headers => [ $headers.pairs ]
+        );
+			}
 		};
 
 		self.handleResponse(

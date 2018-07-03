@@ -166,29 +166,6 @@ DIE
 		);
 	}
 
-	method getAllAssets($characterID?, :$datasource) {
-		my $firstPage = self.getCharacterAssets;
-
-		my $topPage = $firstPage<__cache__><pages>;
-		my $assetList = $firstPage<data>;
-		my $url = $firstPage<__cache__><url>;
-
-		for 2..$topPage -> $p {
-			my $a = 2500;
-			sleep ($a + (^$a / 2).pick) / 1000;
-			my $curURL = "{ $url }?token={ self.sso.tokenData<access_token> }\&page={ $p }";
-			my $cmd = "curl -s '$curURL'";
-			say "C{$p}: {$cmd}";
-			my $json = qqx{$cmd};
-			# cw: Also write $json out to a file.
-#$json.say;
-			#
-			my $o = from-json($json);
-			$assetList.push: $o;
-		}
-
-		$assetList;
-	}
 
 	method getAgents(:$datasource) {
 		self.checkScope('esi-characters.read_agents_research.v1');
@@ -204,13 +181,21 @@ DIE
 		);
 	}
 
-	method getAssets (:$datasource) {
+	method getAssets (:$filter, :$datasource) {
+		die qq:to/DIE/
+<filter> must be a code block, which can filter on one or a combination of
+the following traits:
+	is_singleton, item_id, location_flag, location_id, location_type, type_id
+	or quantity
+DIE
+			unless $filter ~~ (Block, Routine, WhateverCode).any;
+
 		self.checkScope('esi-assets.read_assets.v1');
 
 		# Hold this until we know if :$pages will stick around.
 		my $url = "{ self.sso.characterID }/assets/";
 
-		self.requestByPrefix($url, :$datasource, :paged);
+		self.requestByPrefix($url, :$filter, :$datasource, :paged);
 	}
 
 	method getAssetLocations (@item_ids, :$datasource) {

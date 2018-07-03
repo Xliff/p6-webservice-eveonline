@@ -92,9 +92,11 @@ class WebService::EveOnline::RESTBase {
 		:$method,
 		:$headers,
 		:$cache_ttl,
-		:$force
+		:$force,
+		:$filter
 	) {
 		my $retVal = self.makeRequest($url, :$method, :$headers, :$cache_ttl, :$force);
+
 		if $retVal<__cache__><pages>.defined {
 			my $page = 2;
 			my $maxPage = $retVal<__cache__><pages>;
@@ -111,6 +113,7 @@ class WebService::EveOnline::RESTBase {
 				last if $page++ >= $maxPage;
 			}
 		}
+		$retVal<data> .= grep($filter) if $filter.defined;
 		$retVal;
 	}
 
@@ -129,7 +132,7 @@ class WebService::EveOnline::RESTBase {
 		:$method,
 		:$headers,
 		:$cache_ttl,
-		:$force
+		:$force,
 	) {
 		$.sso.refreshToken if $.sso.defined && DateTime.now > $.sso.expires;
 
