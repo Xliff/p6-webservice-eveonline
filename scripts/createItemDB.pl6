@@ -35,7 +35,7 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 			typeID INTEGER PRIMARY KEY NOT NULL,
 			groupID INTEGER NOT NULL,
 			typeName VARCHAR(100),
-			bpID INTEGER 
+			bpID INTEGER
 		)
 	STATEMENT
 
@@ -116,54 +116,6 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	$i_sth.finish;
 	say "({$cnt})";
 
-	print "Adding regions...";
-	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-	  CREATE TABLE Regions (
-			regionID INTEGER PRIMARY KEY NOT NULL,
-			regionName VARCHAR(100)
-		);
-	STATEMENT
-
-	$o_sth.execute();
-
-	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-		CREATE INDEX Region_idx ON Regions(regionID)
-	STATEMENT
-
-	$o_sth.execute();
-
-	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-		CREATE INDEX Region_Name_idx ON Regions(regionName)
-	STATEMENT
-
-	$o_sth.execute();
-
-	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
-		SELECT regionID, regionName
-		FROM mapRegions
-		ORDER BY regionID
-	STATEMENT
-
-	$i_sth.execute();
-
-	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
-		INSERT INTO Regions (
-			regionID, regionName
-		)
-		VALUES (?, ?)
-	STATEMENT
-
-	@data = $i_sth.allrows(:array-of-hash);
-	$cnt = 0;
-	for @data {
-    $o_sth.execute(
-    	$_<regionID>,
-    	$_<regionName>
-		);
-	  print '.' if $cnt++ % 1000 == 0;
-	}
-	say "({$cnt})";
-
   # Stations
   print "Adding stations...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
@@ -226,10 +178,73 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
   $i_sth.finish;
 	say "({$cnt})";
 
+	print "Adding regions...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+	  CREATE TABLE Regions (
+	    regionID INTEGER PRIMARY KEY NOT NULL,
+	    regionName VARCHAR(100) DEFAULT NULL,
+	    x DOUBLE DEFAULT NULL,
+	    y DOUBLE DEFAULT NULL,
+	    z DOUBLE DEFAULT NULL,
+	    xMin DOUBLE DEFAULT NULL,
+	    xMax DOUBLE DEFAULT NULL,
+	    yMin DOUBLE DEFAULT NULL,
+	    yMax DOUBLE DEFAULT NULL,
+	    zMin DOUBLE DEFAULT NULL,
+	    zMax DOUBLE DEFAULT NULL,
+	    radius FLOAT DEFAULT NULL
+	  )
+  STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Region_Name_idx ON Regions(regionName)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT
+			regionID,
+			regionName,
+			x, y, z, radius,
+			xMin, xMax,
+			yMin, yMax,
+			zMin, zMax
+		FROM mapRegions
+  STATEMENT
+
+	$i_sth.execute;
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO Regions (
+			regionID, regionName, x, y, z, radius, xMin, xMax, yMin, yMax,
+			zMin, zMax
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+	  $o_sth.execute($_<
+		  regionID
+		  regionName
+		  x y z radius
+		  xMin xMax
+		  yMin yMax
+		  zMin zMax
+    >);
+		print '.' if $cnt++ % 5 == 0;
+	}
+  $i_sth.finish;
+  say "({$cnt})";
+
 	print "Adding reactions...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		CREATE TABLE Reactions (
-		  reactionTypeID INTEGER PRIMARYY KEY NOT NULL,
+		  reactionTypeIDquit INTEGER NOT NULL,
 			input INTEGER,
 			typeID INTEGER,
 			quantity INTEGER,
