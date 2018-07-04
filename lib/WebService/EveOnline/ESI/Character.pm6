@@ -149,11 +149,11 @@ DIE
 			unless
 				( $changes<label_ids> && $changes<label_ids>.map( *.Int ).all() ~~ Int )
 				||
-				( $changes<standing> && -10 < $changes<standing> < 10 )
+				( $changes<standing> && $changes<standing> ~~ -10…10 )
 				||
 				( $changes<watched> && $changes<watched> == (1, 0, True, False).any() )
 				||
-				( $changes<watched> && $changes<watched> ~~ m:i/'True'|'False'/ );
+				( $changes<watched> && $changes<watched>.lc eq <true false>.any() );
 
 		my %usedChanges = $changes.clone;
 		%usedChanges<watched> = %usedChanges.Bool.Str.lc;
@@ -165,7 +165,6 @@ DIE
 			|%usedChanges
 		);
 	}
-
 
 	method getAgents(:$datasource) {
 		self.checkScope('esi-characters.read_agents_research.v1');
@@ -235,7 +234,7 @@ DIE
 
 	method getBlueprints(:$datasource) {
 		self.checkScope('esi-characters.read_blueprints.v1');
-		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource);
+		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource, :paged);
 	}
 
 	method getCalendarEvents(:$datasource) {
