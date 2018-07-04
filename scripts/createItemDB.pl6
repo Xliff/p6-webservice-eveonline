@@ -3,7 +3,6 @@
 use v6.c;
 use DBIish;
 
-
 sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database = "Eve") {
 	my $i_dbh = DBIish.connect(
 		'mysql',
@@ -173,7 +172,7 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	    	$_<regionID>,
 	    	$_<stationName>
 		);
-		print '.' if $cnt++ % 1000 == 0;
+		print '.' if $cnt++ % 500 == 0;
 	}
   $i_sth.finish;
 	say "({$cnt})";
@@ -241,10 +240,95 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
   $i_sth.finish;
   say "({$cnt})";
 
+	print "Adding solar systems...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+	  CREATE TABLE SolSystems (
+			solarSystemID INTEGER PRIMARY KEY NOT NULL,
+      regionID INTEGER DEFAULT NULL,
+      constellationID INTEGER DEFAULT NULL,
+      solarSystemName VARCHAR(100) DEFAULT NULL,
+      x DOUBLE DEFAULT NULL,
+      y DOUBLE DEFAULT NULL,
+      z DOUBLE DEFAULT NULL,
+      xMin DOUBLE DEFAULT NULL,
+      xMax DOUBLE DEFAULT NULL,
+      yMin DOUBLE DEFAULT NULL,
+      yMax DOUBLE DEFAULT NULL,
+      zMin DOUBLE DEFAULT NULL,
+      zMax DOUBLE DEFAULT NULL,
+      security DOUBLE DEFAULT NULL,
+      radius DOUBLE DEFAULT NULL
+		)
+  STATEMENT
+
+	$o_sth.execute;
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX SolSystems_Name ON SolSystems(solarSystemName)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX SolSystems_RegionID ON SolSystems(regionID)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX SolSystems_Security ON SolSystems(security)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT
+		  solarSystemID,
+		  regionID,
+		  constellationID,
+		  solarSystemName,
+		  x, y, z, radius,
+		  xMin, xMax,
+		  yMin, yMax,
+		  zMin, zMax,
+		  security
+		FROM mapSolarSystems
+	STATEMENT
+
+	$i_sth.execute();
+
+	$o_sth = $o_dbh.prepare(qq:to/STATEMENT/);
+		INSERT INTO SolSystems (
+			solarSystemID, regionID, constellationID, solarSystemName,
+			x, y, z, radius,
+			xMin, xMax,
+			yMin, yMax,
+			zMin, zMax,
+			security
+		)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+	  $o_sth.execute($_<
+		  solarSystemID regionID constellationID solarSystemName
+		  x y z radius
+		  xMin xMax
+		  yMin yMax
+		  zMin zMax
+		  security
+    >);
+		print '.' if $cnt++ % 500 == 0;
+	}
+  $i_sth.finish;
+  say "({$cnt})";
+
 	print "Adding reactions...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		CREATE TABLE Reactions (
-		  reactionTypeIDquit INTEGER NOT NULL,
+		  reactionTypeID INTEGER NOT NULL,
 			input INTEGER,
 			typeID INTEGER,
 			quantity INTEGER,
