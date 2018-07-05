@@ -27,6 +27,14 @@ my @additional-bp-filters = <
 	runs
 >;
 
+my @additional-filters = <
+  systems
+  system-ids
+  regions
+  region-ids
+  station-ids
+>;
+
 sub compareQuantity($num, $l) {
 	do given $l[0] {
 		when '=' { $num == $l[1]; }
@@ -35,7 +43,37 @@ sub compareQuantity($num, $l) {
 	}
 }
 
+sub checkLocation($t, @list, $i) {
+	my @loc = do given $t {
+		when 'systems' | 'regions' {
+			@list.grep({
+				[&&](
+					$i<xMin> <= $_<x> <= $i<xMax>,
+					$i<yMin> <= $_<y> <= $i<yMax>,
+					$i<zMin> <= $_<z> <= $i<zMax>
+				);
+			});
+		}
+
+		when 'stations' {
+			@list.grep({
+				[&&](
+					$_<x> == $i<x>,
+					$_<y> == $i<y>,
+					$_<z> == $i<z>
+				)
+			});
+		}
+	}
+	return False unless +@loc;
+	$_<location> = $i;
+	True;
+}
+
 sub findItems(%filters, $searches) {
+	my @location-based = %filters<ADDITIONAL>;
+	%filters<ADDITIONAL>:delete;
+
 	my $sso = WebService::EveOnline::ESI::SSO.new(
 		:scopes(<
 		  esi-assets.read_assets.v1
@@ -48,38 +86,70 @@ sub findItems(%filters, $searches) {
 	# Add in :type, later.
 	my $asset-api = WebService::EveOnline::ESI::Assets($sso);
 
-	my @found-items;
-		for $searches<what> -> $w {
-			@filtered = %filters.keys;
+	my %found-items = { char => [], corp => [] };
+	for $searches<what> -> $w {
+		@filtered = %filters.keys;
 
-			my $grepSub = sub {
-				for @filtered -> $k {
-					return False unless %filters{$k}($_);
-				}
-				True;
-			};
+		my $grepSub = sub {
+			for @filtered -> $k {
+				return False unless %filters{$k}($_);
+			}
+			True;
+		};
 
-			given $w {
-				when 'asset' {
-					@filtered.keys .= grep(* ne @additional-bp-filters.all);
+		given $w {
+			when 'asset' {
+				@filtered.keys .= grep(* ne @additional-bp-filters.all);
 
-				  @found-items.append: $asset-api.getCharacterAssets(:filter($grepSub))
-						if $searches<where>.any eq <all char>.any;
-					@found-items.append: $asset-api.getCorporationAssets(:filter($grepSub))
-						if $searches<where>.any eq <all corp>.any;
-				}
+			  %found-items<char>.append: $asset-api.getCharacterAssets(:filter($grepSub))
+					if $searches<where>.any eq <all char>.any;
+				%found-items<corp>.append: $asset-api.getCorporationAssets(:filter($grepSub))
+					if $searches<where>.any eq <all corp>.any;
+			}
 
-				when 'bp' {
-					@found-items.append: $asset-api.getCharacterBlueprints(:filter($grepSub))
-						if $searches<where>.any eq <all char>.any;
-					@found-items.append: $asset-api.getCorporationBluePrints(:filter($grepSub))
-						if $searches<where>.any eq <all corp>.any;
-				}
+			when 'bp' {
+				@found-items<char>.append: $asset-api.getCharacterBlueprints(:filter($grepSub))
+					if $searches<where>.any eq <all char>.any;
+				@found-items<corp>.append: $asset-api.getCorporationBluePrints(:filter($grepSub))
+					if $searches<where>.any eq <all corp>.any;
 			}
 		}
 	}
 
 	# Implement location based post-processing, here.
+	if +@location-based {
+		sub arrayToHash($a) {
+			$a.map({ $_<item_id> => $_ }).Hash
+		}
+
+		my %locations = { char => [], corp => [] };
+		for <char corp> -> $c {
+			%found-items{$c} = arrayToHash( %found-items{$_} );
+			%locations{$c} = do given $c {
+				when 'char' {
+					arrayToHash( $asset-api.getCharacterAssetLocations(%found-items{$c}.keys) )
+			  }
+				when 'corp' {
+					arrayToHash( $asset-api.getCorporationAssetLocations(%found-items{%c}.keys) )
+				}
+			}
+			for %locations{$c}.keys -> $k {
+				if %found-items{$c}{$k}:exists {
+					%found-items{$c}{$k}<item_id>:delete;
+					%found-items{$c}{$k}.append: $locations{$c}{$k}.pairs;
+				}
+			}
+
+			# location data is now with the item. Now need to filter. Turns result back into an array.
+			%found-items{$c} = %found-items{$c}.kv.grep({
+				for @location-based -> $l {
+					return False unless $l.value( $_.value );
+				}
+				return True;
+			});
+		}
+
+	}
 
 	@found-items;
 }
@@ -101,7 +171,16 @@ sub resolveItemNames(*@names) {
 	$sth.allrows().map( *[0] );
 }
 
-sub MAIN(:$sqlite, :$corp, :$char, :$blueprints, :$bponly, *%filters) {
+sub MAIN(
+	:$sqlite,
+	:$corp,
+	:$char,
+	:$blueprints,
+	:$bponly,
+	*%filters
+) {
+	my @valid-options = (|@valid-filters, |@additional-bp-filters, |@additional-filters);
+
 	my $search = {
 		where => 'char',
 		what  => [ 'asset' ]
@@ -109,17 +188,15 @@ sub MAIN(:$sqlite, :$corp, :$char, :$blueprints, :$bponly, *%filters) {
 	$search<where> = 'corp' if $corp.defined && $corp;
 	$search<where> = 'char' if $char.defined && $char;
 	$search<where> = 'all'  if [&&]($corp.defined, $char.defined, $corp, $char);
-
 	$search<what>.push: 'bp'   if $blueprints;
 	$search<what> = [ 'bp' ]   if $bponly;
 
-	my @filters;
-
-	if %filters.keys.all ne @valid-filters.any {
+	if %filters.keys.all ne @valid-options.any {
 		USAGE;
 		exit;
 	}
 
+	my @filters;
 	if %filters<location_flag>.defined {
 		@location_flags = %filters<location_flag>.split(/,\s*/);
 		die "Invalid location flag specified."
@@ -133,8 +210,8 @@ sub MAIN(:$sqlite, :$corp, :$char, :$blueprints, :$bponly, *%filters) {
 	if %filters<item_name>.defined || %filters<item-name>.defined {
 		$sq_dbh = openStaticDB($sqlite);
 		@type_ids = resolveItemNames(
-			|( %filters<item_names>.split(/\s*/) ),
-			|( %filters<item-names>.split(/\s*/) )
+			|( %filters<item_names>.split(/,\s*/) ),
+			|( %filters<item-names>.split(/,\s*/) )
 		);
 	}
 
@@ -142,49 +219,67 @@ sub MAIN(:$sqlite, :$corp, :$char, :$blueprints, :$bponly, *%filters) {
 		my $checkQl = sub($f) {
 			die "Invalid quantity specification."
 				unless %filters<quantity> ~~ /^ (<[ > < = ]>?) (\d+) $/;
-			 [ $/[0] // '=', $/[1] ];
+			[ ($/[0] // '='), $/[1] ];
 		}
 
 		if %filters<quantity>.defined {
 			my $ql = $checkQl(%filters<quantity>);
-			@filters.push: {
+			%filters.push: {
 				quantity => { compareQuantity($_<quantity>, $ql) }
 			};
 		}
 
 		if %filteres<runs>.defined {
 			my $ql = $checkQl(%filters<runs>);
-			@filters.push: {
+			%filters.push: {
 				runs => { compareQuantity($_<runs> , $ql); }
 			};
 		}
 	}
 
-	@filters.push: {
+	%filters.push: {
 		is_singleton => {
 			$_<is_singleton>.Bool == %filters<is_singleton>.Bool
 		}
 	} if %filters<is_singleton>.defined;
 
-	@filters.push: {
+	%filters.push: {
 		item_id => {
 			$_<item_id> == %filters<item_id>.split(/,\s*/).map( *.Int ).any
 		}
 	} if $filters<item_id>.defined;
 
-	@filters.push: {
+	%filters.push: {
 			type_id => { $_<type_id> == @type_ids.any }
 	} if +@type_ids;
 
-	@filters.push: {
+	%filters.push: {
 		location_type => { $_<location_type> == @location_types.any }
 	} if +@location_types;
 
-	@filters.push: {
+	%filters.push: {
 		location_flag => { $_<location_flag> = @location_flags.any }
 	} if +@location_flags;
 
-	showResults( findItems(@filters, $search) );
+	# cw: XXX - TODO: This will need to be split up into asset location types.
+	#     These searches may all need to be mutually exclusive as well.
+
+	# system
+	%filters<ADDITIONAL>.push: {
+		system-ids => { checkLocation('systems', @systems, $_) }
+	} if +@systems;
+
+  # other
+	%filters<ADDITIONAL>.push: {
+		region-ids => { checkLocation('regions', @regions, $_) }
+	} if +@regions;
+
+	# station
+	%filters<ADDITIONAL>.push: {
+		stations   => { checkLocation('stations', @stations, $_) }
+	} if +@stations;
+
+	showResults( findItems(%filters, $search) );
 }
 
 use nqp;
@@ -224,5 +319,21 @@ BLUEPRINT FILTERS
 	--is-original     If blueprint is original
 	--runs            Matches number of runs left on a blueprint. Uses quantity
 	                  logic matching. See --quantity.
+
+SEARCH TYPES
+	--systems         Comma separated list of system names. If any system name
+	                  has a space, the entire list must be quoted.
+	--system-ids      Comma separated list of system IDs
+
+	-OR-
+
+	--regions         Comma separated list of region names. If any region name
+	                  has a space, the entire list must be quoted.
+	--region-ids 			Comma separated list of region ids
+
+	-OR-
+
+	--station-ids     Comma separated list of station ID
 USAGE
+
 }

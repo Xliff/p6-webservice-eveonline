@@ -123,7 +123,10 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 			security INTEGER,
 			solarSystemID INTEGER,
 			regionID INTEGER,
-			stationName VARCHAR(100)
+			stationName VARCHAR(100),
+			x DOUBLE NOT NULL,
+			y DOUBLE NOT NULL,
+			z DOUBLE NOT NULL
 		)
 	STATEMENT
 
@@ -148,7 +151,7 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	$o_sth.execute();
 
 	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
-		SELECT stationID, security, solarSystemID, regionID, stationName
+		SELECT stationID, security, solarSystemID, regionID, stationName, x, y, z
 		FROM staStations
 		ORDER BY stationID
   STATEMENT
@@ -157,9 +160,9 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		INSERT INTO Stations (
-			stationID, security, solarSystemID, regionID, stationName
+			stationID, security, solarSystemID, regionID, stationName, x, y, z
 		)
-		VALUES (?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	STATEMENT
 
 	@data = $i_sth.allrows(:array-of-hash);
