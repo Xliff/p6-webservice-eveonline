@@ -31,6 +31,10 @@ grammar Cookie_Grammar {
     token httponly { :i HttpOnly ';'? }
 }
 
+sub arrayToHash($a, $k) is export {
+  $a.map({ $_{$k} => $_ }).Hash
+}
+
 sub urlEncode($s) is export {
 	$s.subst(/<-alnum>/, *.ord.fmt("%%%02X"), :g);
 }

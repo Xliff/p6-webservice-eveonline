@@ -118,19 +118,21 @@ sub findItems(%filters, $searches) {
 
 	# Implement location based post-processing, here.
 	if +@location-based {
-		sub arrayToHash($a) {
-			$a.map({ $_<item_id> => $_ }).Hash
-		}
-
 		my %locations = { char => [], corp => [] };
 		for <char corp> -> $c {
-			%found-items{$c} = arrayToHash( %found-items{$_} );
+			%found-items{$c} = arrayToHash( %found-items{$_}, 'item_id' );
 			%locations{$c} = do given $c {
 				when 'char' {
-					arrayToHash( $asset-api.getCharacterAssetLocations(%found-items{$c}.keys) )
+					arrayToHash(
+						$asset-api.getCharacterAssetLocations(%found-items{$c}.keys.Array),
+						'item_id'
+					)
 			  }
 				when 'corp' {
-					arrayToHash( $asset-api.getCorporationAssetLocations(%found-items{%c}.keys) )
+					arrayToHash(
+						$asset-api.getCorporationAssetLocations(%found-items{%c}.keys.Array)
+						'item_id'
+					)
 				}
 			}
 			for %locations{$c}.keys -> $k {
@@ -141,14 +143,14 @@ sub findItems(%filters, $searches) {
 			}
 
 			# location data is now with the item. Now need to filter. Turns result back into an array.
+			# Note that location-based searching uses inverse logic than asset-based.
 			%found-items{$c} = %found-items{$c}.kv.grep({
 				for @location-based -> $l {
-					return False unless $l.value( $_.value );
+					return True if $l.value( $_.value );
 				}
-				return True;
+				False;
 			});
 		}
-
 	}
 
 	@found-items;
@@ -168,7 +170,45 @@ sub resolveItemNames(*@names) {
 	STATEMENT
 
 	$sth.execute();
-	$sth.allrows().map( *[0] );
+	$sth.allrows().flat;
+}
+
+sub resolveRegionNames(@names, @regions) {
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/)
+	  SELECT s.*
+	  FROM SolSystems s
+		INNER JOIN Regions r ON r.regionID = s.regionID
+	  WHERE
+			r.regionName IN (
+				{ @names.map( "'{ * }'" ).join(',') }
+		  )
+			OR
+			r.regionID in (
+			  { @region.join(',') }
+			)
+	STATEMENT
+
+	$sth.execute();
+	arrayToHash(
+		$sth.allrows(:array-of-hash),
+		'solarSystemID'
+	);
+}
+
+sub resolveSystemNames(@names) {
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/)
+	  SELECT *
+	  FROM SolSystems
+	  WHERE solarSystemName IN (
+			{ @names.map( "'{ * }'" ).join(',') }
+	  )
+	STATEMENT
+
+	$sth.execute();
+	arrayToHash(
+		$sth.allrows(:array-of-hash),
+		'solarSystemID'
+	);
 }
 
 sub MAIN(
@@ -177,59 +217,89 @@ sub MAIN(
 	:$char,
 	:$blueprints,
 	:$bponly,
-	*%filters
+	*%extras
 ) {
-	my @valid-options = (|@valid-filters, |@additional-bp-filters, |@additional-filters);
+	my regex c { ',' \s* };
+
+	my @valid-options = (
+		|@valid-filters,
+		|@additional-bp-filters,
+		|@additional-filters
+	);
 
 	my $search = {
 		where => 'char',
 		what  => [ 'asset' ]
-	}
+	};
 	$search<where> = 'corp' if $corp.defined && $corp;
 	$search<where> = 'char' if $char.defined && $char;
 	$search<where> = 'all'  if [&&]($corp.defined, $char.defined, $corp, $char);
+
 	$search<what>.push: 'bp'   if $blueprints;
 	$search<what> = [ 'bp' ]   if $bponly;
 
-	if %filters.keys.all ne @valid-options.any {
+	if %extras.keys.all ne @valid-options.any {
 		USAGE;
 		exit;
 	}
 
-	my @filters;
-	if %filters<location_flag>.defined {
-		@location_flags = %filters<location_flag>.split(/,\s*/);
+	my %filters;
+	if %extras<location_flag>.defined {
+		@location_flags = %extras<location_flag>.split(/<c>/);
 		die "Invalid location flag specified."
 			unless @location_flags.all eq @valid-location-flags.any;
 	}
 
 	my @type_ids, @location_types, $ql;
-
-	@type_ids = %filters<type_id>.split(/,\s*/);
-
-	if %filters<item_name>.defined || %filters<item-name>.defined {
+	@type_ids = %extras<type_id>.split(/<c>/) if %extras<type_id>.defined;
+	if %extras<item_names>.defined || %extras<item-names>.defined {
 		$sq_dbh = openStaticDB($sqlite);
-		@type_ids = resolveItemNames(
-			|( %filters<item_names>.split(/,\s*/) ),
-			|( %filters<item-names>.split(/,\s*/) )
+		@type_ids.append: resolveItemNames(
+			|( %extras<item_names>.split(/<c>/) ),
+			|( %extras<item-names>.split(/<c>/) )
 		);
 	}
+
+	my @systems;
+	@systems.append: %extras<system_ids>.split(/<c>/) if %extras<system_id>.defined;
+	@systems.append: %extras<system-ids>.split(/<c>/) if %extras<system-id>.defined;
+	@systems.append: resolveSystemNames(
+		|( %extras<systems>.split(/<c>/) )
+	) if %extras<systems>.defined;
+
+	# The above code will NOT affect this, since system-based and region-based
+	# searches are NOT allowed together.
+	#
+	# It IS possible that this logic can be used together, but care must be insured
+	# during ACTUAL TESTING that they are compatible.
+	#
+	# For now, assume that the appends below start with an EMPTY array.
+	@systems.append: %extras<region_ids>.split(/<c>/) if %extras<region_ids>.defined;
+	@systems.append: %extras<region-ids>.split(/<c>/) if $extras<region-ids>.defined;
+	@regions.append: resolveRegionNames(
+		%extras<regions>.split(/<c>/),
+		@regions
+	) if %extras<regions>.defined;
+
+	my @stations;
+	@stations.append: %extras<station-ids>.split(/<c>/) if %extras<station-ids>.defined;
+	@stations.append: %extras<station_ids>.split(/<c>/) if %extras<station_ids>.defined;
 
 	{
 		my $checkQl = sub($f) {
 			die "Invalid quantity specification."
-				unless %filters<quantity> ~~ /^ (<[ > < = ]>?) (\d+) $/;
+				unless %extras<quantity> ~~ /^ (<[ > < = ]>?) (\d+) $/;
 			[ ($/[0] // '='), $/[1] ];
 		}
 
-		if %filters<quantity>.defined {
-			my $ql = $checkQl(%filters<quantity>);
+		if %extras<quantity>.defined {
+			my $ql = $checkQl(%extras<quantity>);
 			%filters.push: {
 				quantity => { compareQuantity($_<quantity>, $ql) }
 			};
 		}
 
-		if %filteres<runs>.defined {
+		if %extras<runs>.defined {
 			my $ql = $checkQl(%filters<runs>);
 			%filters.push: {
 				runs => { compareQuantity($_<runs> , $ql); }
@@ -239,18 +309,18 @@ sub MAIN(
 
 	%filters.push: {
 		is_singleton => {
-			$_<is_singleton>.Bool == %filters<is_singleton>.Bool
+			$_<is_singleton>.Bool == %extras<is_singleton>.Bool
 		}
-	} if %filters<is_singleton>.defined;
+	} if %extras<is_singleton>.defined;
 
 	%filters.push: {
 		item_id => {
-			$_<item_id> == %filters<item_id>.split(/,\s*/).map( *.Int ).any
+			$_<item_id> == %extras<item_id>.split(/<c>/).map( *.Int ).any
 		}
-	} if $filters<item_id>.defined;
+	} if %extras<item_id>.defined;
 
 	%filters.push: {
-			type_id => { $_<type_id> == @type_ids.any }
+		type_id => { $_<type_id> == @type_ids.any }
 	} if +@type_ids;
 
 	%filters.push: {
@@ -258,25 +328,39 @@ sub MAIN(
 	} if +@location_types;
 
 	%filters.push: {
-		location_flag => { $_<location_flag> = @location_flags.any }
+		location_flag => { $_<location_flag> == @location_flags.any }
 	} if +@location_flags;
 
-	# cw: XXX - TODO: This will need to be split up into asset location types.
-	#     These searches may all need to be mutually exclusive as well.
+	if %extras<is-original>.defined || %extras<is-copy>.defined {
+		die "Cannot specify --is-original or --is-copy at the same time."
+			if %extras<is-original>.defined && %extas<is-copy>.defined;
+		%filters.push: {
+			is-original => {
+			  (%extras<is-original> // !%extras<is-copy>) ??
+					($_<quantity> == -1)
+					!!
+					($_<quantity> == -2)
+			}
+		};
+	}
+
+	my @loc-search = (+@systems, +@regions, +@stations);
+	die "Too many location based searches specified. Please choose a single type of location search."
+		unless @loc-search.one || @loc-search.none;
 
 	# system
 	%filters<ADDITIONAL>.push: {
 		system-ids => { checkLocation('systems', @systems, $_) }
 	} if +@systems;
 
-  # other
+  # region => list of systems
 	%filters<ADDITIONAL>.push: {
 		region-ids => { checkLocation('regions', @regions, $_) }
 	} if +@regions;
 
 	# station
 	%filters<ADDITIONAL>.push: {
-		stations   => { checkLocation('stations', @stations, $_) }
+		stations  => { checkLocation('stations', @stations, $_) }
 	} if +@stations;
 
 	showResults( findItems(%filters, $search) );
@@ -286,54 +370,65 @@ use nqp;
 sub USAGE {
 	  # cw: Don't know why the extra spacings are needed. Editor?
 		say nqp::getlexcaller(q|$*USAGE|) ~ qq:to/USAGE/;
+REQUIRED
+	--sqlite          Location of static data file. Program will attempt to
+	 	                autodetect this file, but if it is not named one of:
+										  ./Eve_Static.sqlite3
+										  ./data/Eve_Static.sqlite3
+										  ../data/Eve_Static.sqlite3
+										Then the file can be specified using this option.
 
 SEARCH TYPES
 	--corp					  Search corporation assets
 	--char						Search character assets [default]
 
-ASSET FILTERS
-	--is_singleton
-	--item_id					Comma separated list of item_ids
-	--location_flag
-	--location_id			Numeric location ID
-	--location_type
-	--type_id					Comma separated list of type_ids
-	--quantity				Match the number of items in a stack. Quantity logic can be
-	                  specified by the following methods:
-                      >[num] - At least #num items in stack
-											<[num] - No more than #num items in stack
-											=[num] - Exactly #num items in stack
-											[num]  - Same as above.
-										Where [num] is a numeric value.
-
 	--blueprints 			Add blueprints into search results
 	--bponly          ONLY search for blueprints
 
-	--item-name
-	--item_name 			Comma separated list of item names, if any argument includes
-                    spaces, surround the entire argument in quotes.
+EXTRA OPTIONS
 
-BLUEPRINT FILTERS
-	--name            Name of Blueprint
-	--is-copy         If blueprint is a copy
-	--is-original     If blueprint is original
-	--runs            Matches number of runs left on a blueprint. Uses quantity
-	                  logic matching. See --quantity.
+	ASSET FILTERS
+		--is_singleton
+		--item_id					Comma separated list of item_ids
+		--location_flag
+		--location_id			Numeric location ID
+		--location_type
+		--type_id					Comma separated list of type_ids
+		--quantity				Match the number of items in a stack. Quantity logic can be
+		                  specified by the following methods:
+	                      >[num] - At least #num items in stack
+												<[num] - No more than #num items in stack
+												=[num] - Exactly #num items in stack
+												[num]  - Same as above.
+											Where [num] is a numeric value.
 
-SEARCH TYPES
-	--systems         Comma separated list of system names. If any system name
-	                  has a space, the entire list must be quoted.
-	--system-ids      Comma separated list of system IDs
+		--item-name
+		--item_name 			Comma separated list of item names, if any argument includes
+	                    spaces, surround the entire argument in quotes.
 
-	-OR-
+	BLUEPRINT FILTERS
+		--name            Name of Blueprint
+		--is-copy         If blueprint is a copy
+		--is-original     If blueprint is original
+		--runs            Matches number of runs left on a blueprint. Uses quantity
+		                  logic matching. See --quantity.
 
-	--regions         Comma separated list of region names. If any region name
-	                  has a space, the entire list must be quoted.
-	--region-ids 			Comma separated list of region ids
+	LOCATION-BASED SEARCH TYPES [Select only ONE type]:
+		--systems         Comma separated list of system names. If any system name
+		                  has a space, the entire list must be quoted.
+		--system_ids
+		--system-ids      Comma separated list of system IDs
 
-	-OR-
+		-OR-
 
-	--station-ids     Comma separated list of station ID
+		--regions         Comma separated list of region names. If any region name
+		                  has a space, the entire list must be quoted.
+		--region_ids
+		--region-ids 			Comma separated list of region ids
+
+		-OR-
+
+		--station-ids     Comma separated list of station ID
 USAGE
 
 }
