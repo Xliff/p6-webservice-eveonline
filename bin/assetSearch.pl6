@@ -37,6 +37,8 @@ my @additional-filters = <
   station-ids
 >;
 
+my @aliases = <name names>;
+
 sub compareQuantity($num, $l) {
 	do given $l[0] {
 		when '=' { $num == $l[1]; }
@@ -73,7 +75,7 @@ sub checkLocation($t, @list, $i) {
 }
 
 sub findItems(%filters, $searches) {
-	my @location-based = %filters<ADDITIONAL>;
+	my @location-based = %filters<ADDITIONAL>.flat;
 	%filters<ADDITIONAL>:delete;
 
 	my $sso = WebService::EveOnline::SSO.new(
@@ -92,9 +94,9 @@ sub findItems(%filters, $searches) {
 	for $searches<what> -> $w {
 		my @filtered = %filters.keys;
 
-		my $grepSub = sub {
+		my $grepSub = sub (*@a) {
 			for @filtered -> $k {
-				return False unless %filters{$k}($_);
+				return False unless %filters{$k}(@a[0]);
 			}
 			True;
 		};
@@ -119,6 +121,7 @@ sub findItems(%filters, $searches) {
 	}
 
 	# Implement location based post-processing, here.
+	@location-based.gist.say;
 	if +@location-based {
 		my %locations = ( char => [], corp => [] );
 		for <char corp> -> $c {
@@ -163,14 +166,15 @@ sub showResults(%items) {
 }
 
 sub resolveItemNames(*@names) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
+	my $sql = qq:to/STATEMENT/;
 	  SELECT typeID
 	  FROM invTypes
 	  WHERE typeName IN (
-			{ @names.map( "'{ * }'" ).join(',') }
+			{ @names.map({ "'{ $_ }'" }).join(',') }
 	  )
 	STATEMENT
 
+	my $sth = $sq_dbh.prepare($sql);
 	$sth.execute();
 	$sth.allrows().flat;
 }
@@ -226,7 +230,8 @@ sub MAIN(
 	my @valid-options = (
 		|@valid-filters,
 		|@additional-bp-filters,
-		|@additional-filters
+		|@additional-filters,
+		|@aliases
 	);
 
 	my $search = {
@@ -259,11 +264,22 @@ sub MAIN(
 	}
 
 	@type_ids = %extras<type_id>.split(/<c>/) if %extras<type_id>.defined;
-	if %extras<item_names>.defined || %extras<item-names>.defined {
+	if [||] (
+		%extras<item_name>.defined,
+		%extras<item-name>.defined,
+		%extras<names>.defined,
+		%extras<name>.defined;
+	) {
 		$sq_dbh = openStaticDB($sqlite);
+
+		# There is a lot of work being done, here.
 		@type_ids.append: resolveItemNames(
-			|( %extras<item_names>.split(/<c>/) ),
-			|( %extras<item-names>.split(/<c>/) )
+			(
+				|( %extras<item_name> // () ).split(/<c>/),
+				|( %extras<item-name> // () ).split(/<c>/),
+				|( %extras<names>     // () ).split(/<c>/),
+				|( %extras<name>      // () ).split(/<c>/)
+			).unique.grep( *.chars )
 		);
 	}
 
@@ -350,6 +366,7 @@ sub MAIN(
 		unless @loc-search.one || @loc-search.none;
 
 	# system
+	%filters<ADDITIONAL> = [];
 	%filters<ADDITIONAL>.push: {
 		system-ids => { checkLocation('systems', @systems, $_) }
 	} if +@systems;
@@ -364,6 +381,7 @@ sub MAIN(
 		stations  => { checkLocation('stations', @stations, $_) }
 	} if +@stations;
 
+	%filters.gist.say;
 	showResults( findItems(%filters, $search) );
 }
 
@@ -405,6 +423,7 @@ EXTRA OPTIONS
                         [num]  - Same as above.
                       Where [num] is a numeric value.
 
+    --name(s)
     --item-name
     --item_name       Comma separated list of item names, if any argument includes
                       spaces, surround the entire argument in quotes.
