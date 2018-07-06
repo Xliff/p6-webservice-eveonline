@@ -4,10 +4,12 @@ use v6.c;
 
 use DBIish;
 
+use WebService::EveOnline::SSO;
+use WebService::EveOnline::Utils;
+use WebService::EveOnline::Data::Misc;
 use WebService::EveOnline::ESI::Assets;
 
-my (%inv, %manifest, %assets)
-my ($asset-api, $sq_dbh);
+my (%inv, %manifest, %assets, $asset-api);
 
 my @valid-filters = <
 	is_singleton
@@ -74,7 +76,7 @@ sub findItems(%filters, $searches) {
 	my @location-based = %filters<ADDITIONAL>;
 	%filters<ADDITIONAL>:delete;
 
-	my $sso = WebService::EveOnline::ESI::SSO.new(
+	my $sso = WebService::EveOnline::SSO.new(
 		:scopes(<
 		  esi-assets.read_assets.v1
 		  esi-assets.read_corporation_assets.v1
@@ -84,11 +86,11 @@ sub findItems(%filters, $searches) {
 	);
 
 	# Add in :type, later.
-	my $asset-api = WebService::EveOnline::ESI::Assets($sso);
+	my $asset-api = WebService::EveOnline::ESI::Assets.new($sso);
 
-	my %found-items = { char => [], corp => [] };
+	my %found-items = ( char => [], corp => [] );
 	for $searches<what> -> $w {
-		@filtered = %filters.keys;
+		my @filtered = %filters.keys;
 
 		my $grepSub = sub {
 			for @filtered -> $k {
@@ -99,7 +101,7 @@ sub findItems(%filters, $searches) {
 
 		given $w {
 			when 'asset' {
-				@filtered.keys .= grep(* ne @additional-bp-filters.all);
+				@filtered .= grep(* ne @additional-bp-filters.all);
 
 			  %found-items<char>.append: $asset-api.getCharacterAssets(:filter($grepSub))
 					if $searches<where>.any eq <all char>.any;
@@ -108,9 +110,9 @@ sub findItems(%filters, $searches) {
 			}
 
 			when 'bp' {
-				@found-items<char>.append: $asset-api.getCharacterBlueprints(:filter($grepSub))
+				%found-items<char>.append: $asset-api.getCharacterBlueprints(:filter($grepSub))
 					if $searches<where>.any eq <all char>.any;
-				@found-items<corp>.append: $asset-api.getCorporationBluePrints(:filter($grepSub))
+				%found-items<corp>.append: $asset-api.getCorporationBluePrints(:filter($grepSub))
 					if $searches<where>.any eq <all corp>.any;
 			}
 		}
@@ -118,7 +120,7 @@ sub findItems(%filters, $searches) {
 
 	# Implement location based post-processing, here.
 	if +@location-based {
-		my %locations = { char => [], corp => [] };
+		my %locations = ( char => [], corp => [] );
 		for <char corp> -> $c {
 			%found-items{$c} = arrayToHash( %found-items{$_}, 'item_id' );
 			%locations{$c} = do given $c {
@@ -130,7 +132,7 @@ sub findItems(%filters, $searches) {
 			  }
 				when 'corp' {
 					arrayToHash(
-						$asset-api.getCorporationAssetLocations(%found-items{%c}.keys.Array)
+						$asset-api.getCorporationAssetLocations(%found-items{$c}.keys.Array),
 						'item_id'
 					)
 				}
@@ -138,7 +140,7 @@ sub findItems(%filters, $searches) {
 			for %locations{$c}.keys -> $k {
 				if %found-items{$c}{$k}:exists {
 					%found-items{$c}{$k}<item_id>:delete;
-					%found-items{$c}{$k}.append: $locations{$c}{$k}.pairs;
+					%found-items{$c}{$k}.append: %locations{$c}{$k}.pairs;
 				}
 			}
 
@@ -153,15 +155,15 @@ sub findItems(%filters, $searches) {
 		}
 	}
 
-	@found-items;
+	%found-items;
 }
 
-sub showResults(@items) {
-	# NYI
+sub showResults(%items) {
+	%items.gist.say;
 }
 
 sub resolveItemNames(*@names) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/)
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 	  SELECT typeID
 	  FROM invTypes
 	  WHERE typeName IN (
@@ -174,7 +176,7 @@ sub resolveItemNames(*@names) {
 }
 
 sub resolveRegionNames(@names, @regions) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/)
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 	  SELECT s.*
 	  FROM SolSystems s
 		INNER JOIN Regions r ON r.regionID = s.regionID
@@ -184,7 +186,7 @@ sub resolveRegionNames(@names, @regions) {
 		  )
 			OR
 			r.regionID in (
-			  { @region.join(',') }
+			  { @regions.join(',') }
 			)
 	STATEMENT
 
@@ -196,7 +198,7 @@ sub resolveRegionNames(@names, @regions) {
 }
 
 sub resolveSystemNames(@names) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/)
+	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 	  SELECT *
 	  FROM SolSystems
 	  WHERE solarSystemName IN (
@@ -238,19 +240,24 @@ sub MAIN(
 	$search<what>.push: 'bp'   if $blueprints;
 	$search<what> = [ 'bp' ]   if $bponly;
 
-	if %extras.keys.all ne @valid-options.any {
+	if
+		! +%extras
+		||
+		%extras.keys.all ne @valid-options.any
+	{
 		USAGE;
 		exit;
 	}
 
-	my %filters;
+	my (%filters, @location_flags, @systems, @regions);
+	my (@type_ids, @location_types, $ql);
+
 	if %extras<location_flag>.defined {
 		@location_flags = %extras<location_flag>.split(/<c>/);
 		die "Invalid location flag specified."
 			unless @location_flags.all eq @valid-location-flags.any;
 	}
 
-	my @type_ids, @location_types, $ql;
 	@type_ids = %extras<type_id>.split(/<c>/) if %extras<type_id>.defined;
 	if %extras<item_names>.defined || %extras<item-names>.defined {
 		$sq_dbh = openStaticDB($sqlite);
@@ -260,25 +267,19 @@ sub MAIN(
 		);
 	}
 
-	my @systems;
 	@systems.append: %extras<system_ids>.split(/<c>/) if %extras<system_id>.defined;
 	@systems.append: %extras<system-ids>.split(/<c>/) if %extras<system-id>.defined;
 	@systems.append: resolveSystemNames(
 		|( %extras<systems>.split(/<c>/) )
 	) if %extras<systems>.defined;
 
-	# The above code will NOT affect this, since system-based and region-based
-	# searches are NOT allowed together.
-	#
-	# It IS possible that this logic can be used together, but care must be insured
-	# during ACTUAL TESTING that they are compatible.
-	#
-	# For now, assume that the appends below start with an EMPTY array.
-	@systems.append: %extras<region_ids>.split(/<c>/) if %extras<region_ids>.defined;
-	@systems.append: %extras<region-ids>.split(/<c>/) if $extras<region-ids>.defined;
+	# Even though it is a system-based search, we still need this to be separate
+	# for error-checking purposes.
+	@regions.append: %extras<region_ids>.split(/<c>/) if %extras<region_ids>.defined;
+	@regions.append: %extras<region-ids>.split(/<c>/) if %extras<region-ids>.defined;
 	@regions.append: resolveRegionNames(
 		%extras<regions>.split(/<c>/),
-		@regions
+		@systems
 	) if %extras<regions>.defined;
 
 	my @stations;
@@ -286,9 +287,9 @@ sub MAIN(
 	@stations.append: %extras<station_ids>.split(/<c>/) if %extras<station_ids>.defined;
 
 	{
-		my $checkQl = sub($f) {
+		my $checkQl = sub {
 			die "Invalid quantity specification."
-				unless %extras<quantity> ~~ /^ (<[ > < = ]>?) (\d+) $/;
+				unless $^a ~~ /^ (<[ > < = ]>?) (\d+) $/;
 			[ ($/[0] // '='), $/[1] ];
 		}
 
@@ -333,7 +334,7 @@ sub MAIN(
 
 	if %extras<is-original>.defined || %extras<is-copy>.defined {
 		die "Cannot specify --is-original or --is-copy at the same time."
-			if %extras<is-original>.defined && %extas<is-copy>.defined;
+			if %extras<is-original>.defined && %extras<is-copy>.defined;
 		%filters.push: {
 			is-original => {
 			  (%extras<is-original> // !%extras<is-copy>) ??

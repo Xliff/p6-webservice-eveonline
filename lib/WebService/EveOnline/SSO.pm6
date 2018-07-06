@@ -74,6 +74,10 @@ class WebService::EveOnline::SSO {
 		self!getPrivateData;
 	}
 
+	submethod TWEAK {
+		self.getToken;
+	}
+
 	method new(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile) {
 		self.bless(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile);
 	}

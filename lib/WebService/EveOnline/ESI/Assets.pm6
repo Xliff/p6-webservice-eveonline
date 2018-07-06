@@ -12,13 +12,13 @@ class WebService::EveOnline::ESI::Assets {
 	has $!corp-api;
 
 	submethod BUILD {
-		$!char-api = WebService::EveOnline::ESI::Character.new(self.sso);
-		$!corp-api = WebService::EveOnline::ESI::Corporation.new(self.sso);
+		$!char-api = WebService::EveOnline::ESI::Character.new( :sso(self.sso) );
+		$!corp-api = WebService::EveOnline::ESI::Corporation.new( :sso(self.sso) );
 	}
 
 	method new($sso) {
 		die "A valid SSO object passed as a parameter to new() is required."
-			unless $sso ~~ WebService::EveOnline::SSO;
+			unless $sso ~~ ::('WebService::EveOnline::SSO');
 		self.bless(:$sso);
 	}
 
