@@ -371,65 +371,67 @@ use nqp;
 sub USAGE {
 	  # cw: Don't know why the extra spacings are needed. Editor?
 		say nqp::getlexcaller(q|$*USAGE|) ~ qq:to/USAGE/;
+
+
 REQUIRED
-	--sqlite          Location of static data file. Program will attempt to
-	 	                autodetect this file, but if it is not named one of:
-										  ./Eve_Static.sqlite3
-										  ./data/Eve_Static.sqlite3
-										  ../data/Eve_Static.sqlite3
-										Then the file can be specified using this option.
+  --sqlite         Location of static data file. Program will attempt to
+                   autodetect this file, but if it is not named one of:
+                      ./Eve_Static.sqlite3
+                      ./data/Eve_Static.sqlite3
+                      ../data/Eve_Static.sqlite3
+                    Then the file can be specified using this option.
 
 SEARCH TYPES
-	--corp					  Search corporation assets
-	--char						Search character assets [default]
+  --corp            Search corporation assets
+  --char            Search character assets [default]
 
-	--blueprints 			Add blueprints into search results
-	--bponly          ONLY search for blueprints
+  --blueprints      Add blueprints into search results
+  --bponly          ONLY search for blueprints
 
 EXTRA OPTIONS
 
-	ASSET FILTERS
-		--is_singleton
-		--item_id					Comma separated list of item_ids
-		--location_flag
-		--location_id			Numeric location ID
-		--location_type
-		--type_id					Comma separated list of type_ids
-		--quantity				Match the number of items in a stack. Quantity logic can be
-		                  specified by the following methods:
-	                      >[num] - At least #num items in stack
-												<[num] - No more than #num items in stack
-												=[num] - Exactly #num items in stack
-												[num]  - Same as above.
-											Where [num] is a numeric value.
+  ASSET FILTERS
+    --is_singleton
+    --item_id         Comma separated list of item_ids
+    --location_flag
+    --location_id     Numeric location ID
+    --location_type
+    --type_id         Comma separated list of type_ids
+    --quantity        Match the number of items in a stack. Quantity logic can be
+                      specified by the following methods:
+                        >[num] - At least #num items in stack
+                        <[num] - No more than #num items in stack
+                        =[num] - Exactly #num items in stack
+                        [num]  - Same as above.
+                      Where [num] is a numeric value.
 
-		--item-name
-		--item_name 			Comma separated list of item names, if any argument includes
-	                    spaces, surround the entire argument in quotes.
+    --item-name
+    --item_name       Comma separated list of item names, if any argument includes
+                      spaces, surround the entire argument in quotes.
 
-	BLUEPRINT FILTERS
-		--name            Name of Blueprint
-		--is-copy         If blueprint is a copy
-		--is-original     If blueprint is original
-		--runs            Matches number of runs left on a blueprint. Uses quantity
-		                  logic matching. See --quantity.
+  BLUEPRINT FILTERS
+    --name            Name of Blueprint
+    --is-copy         If blueprint is a copy
+    --is-original     If blueprint is original
+    --runs            Matches number of runs left on a blueprint. Uses quantity
+                      logic matching. See --quantity.
 
-	LOCATION-BASED SEARCH TYPES [Select only ONE type]:
-		--systems         Comma separated list of system names. If any system name
-		                  has a space, the entire list must be quoted.
-		--system_ids
-		--system-ids      Comma separated list of system IDs
+  LOCATION-BASED SEARCH TYPES [Select only ONE type]:
+    --systems         Comma separated list of system names. If any system name
+                      has a space, the entire list must be quoted.
+    --system_ids
+    --system-ids      Comma separated list of system IDs
 
-		-OR-
+    -OR-
 
-		--regions         Comma separated list of region names. If any region name
-		                  has a space, the entire list must be quoted.
-		--region_ids
-		--region-ids 			Comma separated list of region ids
+    --regions         Comma separated list of region names. If any region name
+                      has a space, the entire list must be quoted.
+    --region_ids
+    --region-ids      Comma separated list of region ids
 
-		-OR-
+    -OR-
 
-		--station-ids     Comma separated list of station ID
+    --station-ids     Comma separated list of station ID
 USAGE
 
 }
