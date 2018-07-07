@@ -36,7 +36,7 @@ my @additional-filters = <
   station-ids
 >;
 
-my @aliases = <item-name name names>;
+my @aliases = <item-name name names te me>;
 
 sub compareQuantity($num, $l) {
 	do given $l[0] {
@@ -105,17 +105,21 @@ sub findItems(%filters, $searches) {
 			when 'asset' {
 				@filtered .= grep(* ne @additional-bp-filters.all);
 
-			  %found-items<char>.append: $asset-api.getCharacterAssets(:filter($grepSub))
-					if $searches<where>.any eq <all char>.any;
-				%found-items<corp>.append: $asset-api.getCorporationAssets(:filter($grepSub))
-					if $searches<where>.any eq <all corp>.any;
+			  %found-items<char>.append: $asset-api.getCharacterAssets(
+					:filter($grepSub)
+				) if $searches<where>.any eq <all char>.any;
+				%found-items<corp>.append: $asset-api.getCorporationAssets(
+					:filter($grepSub)
+				) if $searches<where>.any eq <all corp>.any;
 			}
 
 			when 'bp' {
-				%found-items<char>.append: $asset-api.getCharacterBlueprints(:filter($grepSub))
-					if $searches<where>.any eq <all char>.any;
-				%found-items<corp>.append: $asset-api.getCorporationBluePrints(:filter($grepSub))
-					if $searches<where>.any eq <all corp>.any;
+				%found-items<char>.append: $asset-api.getCharacterBlueprints(
+					:filter($grepSub)
+				) if $searches<where>.any eq <all char>.any;
+				%found-items<corp>.append: $asset-api.getCorporationBlueprints(
+					:filter($grepSub)
+				) if $searches<where>.any eq <all corp>.any;
 			}
 		}
 	}
@@ -290,10 +294,6 @@ sub MAIN(
 				|( %extras<name>      // () ).split(/<c>/)
 			).unique.grep( *.chars )
 		);
-
-		#DEBUG#
-		say "TYPEIDS";
-		@type_ids.gist.say;
 	}
 
 	@systems.append: %extras<system_ids>.split(/<c>/) if %extras<system_id>.defined;
@@ -317,27 +317,50 @@ sub MAIN(
 
 	{
 		my $checkQl = sub {
-			die "Invalid quantity specification."
-				unless $^a ~~ /^ (<[ > < = ]>?) (\d+) $/;
+			die "Invalid quantity specification for $^a."
+				unless $^b ~~ /^ (<[ > < = ]>?) (\d+) $/;
 			[ ($/[0] // '='), $/[1] ];
 		}
 
 		if %extras<quantity>.defined {
-			die "Invalid argument for quantity.\n"
-				unless %extras<quantity> ~~ Int;
-
-			my $ql = $checkQl(%extras<quantity>);
+			my $ql = $checkQl('--quantity', %extras<quantity>);
 			%filters.push: {
 				quantity => { compareQuantity($_<quantity>, $ql) }
 			};
 		}
 
 		if %extras<runs>.defined {
-			die "Invalid argument for --runs.\n" unless %extras<runs> ~~ Int;
-
-			my $ql = $checkQl(%filters<runs>);
+			my $ql = $checkQl('--runs', %extras<runs>);
 			%filters.push: {
 				runs => { compareQuantity($_<runs> , $ql); }
+			};
+		}
+
+		if %extras<te>.defined {
+			my $ql = $checkQl('--te', %extras<te>);
+			%filters.push: {
+				time_efficiency => { compareQuantity($_<te> , $ql); }
+			};
+		}
+
+		if %extras<time_efficiency>.defined {
+			my $ql = $checkQl('--time_efficiency', %extras<time_efficiency>);
+			%filters.push: {
+				time_efficiency => { compareQuantity($_<time_efficiency> , $ql); }
+			};
+		}
+
+		if %extras<me>.defined {
+			my $ql = $checkQl('--me', %extras<me>);
+			%filters.push: {
+				material_efficiency => { compareQuantity($_<me> , $ql); }
+			};
+		}
+
+		if %extras<material_efficiency>.defined {
+			my $ql = $checkQl('--material_efficiency', %extras<material_efficiency>);
+			%filters.push: {
+				material_efficiency => { compareQuantity($_<material_efficiency> , $ql); }
 			};
 		}
 	}
@@ -475,6 +498,12 @@ EXTRA OPTIONS
     --is-original     If blueprint is original
     --runs            Matches number of runs left on a blueprint. Uses quantity
                       logic matching. See --quantity.
+		--te							Matches Time Efficiency. Also uses quantity logic,
+                      See --quantity. (Can also be specified as
+											--time_efficiency)
+		--me              Matches Material Efficiency. Also uses quantity logic,
+                      See --quantity. (Can also be specified as
+											--material_efficiency)
 
   LOCATION-BASED SEARCH TYPES [Select only ONE type]:
     --systems         Comma separated list of system names. If any system name

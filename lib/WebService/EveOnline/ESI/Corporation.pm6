@@ -1,7 +1,6 @@
 use v6.c;
 
 use WebService::EveOnline::ESI::Base;
-use WebService::EveOnline::ESI::Character;
 
 class WebService::EveOnline::ESI::Corporation {
   also is WebService::EveOnline::ESI::Base;
@@ -9,7 +8,9 @@ class WebService::EveOnline::ESI::Corporation {
   has $!corporationID;
 
   submethod BUILD {
-    $!corporationID = self.corporation-id;
+    use WebService::EveOnline::ESI::Character;
+    my $c = WebService::EveOnline::ESI::Character.new(:sso(self.sso));
+    $!corporationID = $c.corporation-id;
   }
 
   submethod TWEAK {
@@ -50,9 +51,11 @@ the following traits:
   or quantity
 DIE
       unless $filter ~~ (Block, Routine, WhateverCode).any;
-      
+
     self.checkScope('esi-assets.read_corporation_assets.v1');
-    self.requestByPrefix("{ $!corporationID }/assets/", :$filter, :$datasource);
+    self.requestByPrefix(
+      "{ $!corporationID }/assets/", :$filter, :$datasource, :paged
+    );
   }
 
   method getAssetLocations (@item_ids, :$datasource) {
@@ -87,10 +90,12 @@ DIE
     self.requestByPrefix("{ $!corporationID }/bookmarks/folders/", $datasource);
   }
 
-  method getBlueprints(:$datasource) {
+  method getBlueprints(:$filter, :$datasource) {
     # cw: [Optional] add single page retrieval
     self.checkScope('esi-corporations.read_blueprints.v1');
-    self.requestByPrefix("{ $!corporationID }/blueprints/", :$datasource);
+    self.requestByPrefix(
+      "{ $!corporationID }/blueprints/", :$filter, :$datasource, :paged
+    );
   }
 
   method getContacts(:$datasource) {

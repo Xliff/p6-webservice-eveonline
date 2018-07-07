@@ -93,7 +93,7 @@ class WebService::EveOnline::SSO {
 	method !encodeAuth {
 		encode-base64(
 			#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
-			%!privateData{$!section}<client_id secret_id>.join(':'), :str
+			%!privateData{$!section}<client_id secret_id>.join(':'), '', :str
 		);
 	}
 

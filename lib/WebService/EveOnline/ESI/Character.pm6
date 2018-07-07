@@ -20,7 +20,7 @@ class WebService::EveOnline::ESI::Character {
 	}
 
 	method corporation-id {
-		self.getInformation()<corporation_id>;
+		self.getInformation()<data><corporation_id>;
 	}
 
 	method addContacts(@contacts, :$datasource) {
@@ -355,7 +355,7 @@ DIE
 		my $cid = $characterID // self.sso.characterID;
 		die "<characterID> must be an integer" unless $cid.Int ~~ Int;
 
-		self.requestByPrefix($cid, :$datasource);
+		self.requestByPrefix("{ $cid }/", :$datasource);
 	}
 
 	method getImplants(:$datasource) {

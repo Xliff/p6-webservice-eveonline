@@ -133,6 +133,7 @@ class WebService::EveOnline::RESTBase {
 		:$headers,
 		:$cache_ttl,
 		:$force,
+		:$ua
 	) {
 		$.sso.refreshToken if $.sso.defined && DateTime.now > $.sso.expires;
 
@@ -145,6 +146,7 @@ class WebService::EveOnline::RESTBase {
 			:headers($newHeaders),
 			:$cache_ttl,
 			:$force,
+			:$ua,
 			:json
 		);
 

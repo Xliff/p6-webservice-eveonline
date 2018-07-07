@@ -167,6 +167,7 @@ class WebService::EveOnline::Base {
 
 		my ($retObj, $content);
 		$content = await $response.body if $response ~~ Cro::HTTP::Response;
+
 		given $content {
 			# With Cro::HTTP, this will only occur if there is HTML content.
 			when Str {
@@ -273,7 +274,8 @@ class WebService::EveOnline::Base {
 		:$cache_ttl = $!cache_ttl,
 		:$cache_key = $!cache_key,
 		:$force,
-		:$json
+		:$json,
+    :$ua
 	) {
 		my $response;
 
@@ -313,7 +315,8 @@ class WebService::EveOnline::Base {
 		#say "{ $method == GET ?? 'GET' !! 'POST' } Req: $url";
 		$response = await do given $method {
 			when RequestMethod::GET {
-				$!http_client.get($url, :headers([ $headers.pairs ]));
+        my $wc = $ua.defined ?? $ua !! $!http_client;
+				$wc.get($url, :headers([ $headers.pairs ]));
 			}
 
 			when RequestMethod::POST {
