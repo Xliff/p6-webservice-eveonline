@@ -15,7 +15,6 @@ my @valid-filters = <
 	is_singleton
 	item_id
 	item_name
-	item-name
 	location_flag
 	location_id
 	location_type
@@ -37,7 +36,7 @@ my @additional-filters = <
   station-ids
 >;
 
-my @aliases = <name names>;
+my @aliases = <item-name name names>;
 
 sub compareQuantity($num, $l) {
 	do given $l[0] {
@@ -222,6 +221,7 @@ sub MAIN(
 	:$corp,
 	:$char,
 	:$blueprints,
+	:$bp,
 	:$bponly,
 	*%extras
 ) {
@@ -242,7 +242,9 @@ sub MAIN(
 	$search<where> = 'char' if $char.defined && $char;
 	$search<where> = 'all'  if [&&]($corp.defined, $char.defined, $corp, $char);
 
-	$search<what>.push: 'bp'   if $blueprints;
+	# cw: Would blueprints without a filter be a useful option?
+	#     (Probably for newbies, but....)
+	$search<what>.push: 'bp'   if $blueprints || $bp;
 	$search<what> = [ 'bp' ]   if $bponly;
 
 	if
@@ -255,12 +257,18 @@ sub MAIN(
 	}
 
 	my (%filters, @location_flags, @systems, @regions);
-	my (@type_ids, @location_types, $ql);
+	my (@type_ids, @location_types, @names, $ql);
 
 	if %extras<location_flag>.defined {
 		@location_flags = %extras<location_flag>.split(/<c>/);
 		die "Invalid location flag specified."
 			unless @location_flags.all eq @valid-location-flags.any;
+	}
+
+	if %extras<location_type>.defined {
+		@location_types = %extras<location_type>.split(/<c>/);
+		die "Invalid value for --location_type\n"
+		 	unless @location_types.all eq @valid-location-types.any;
 	}
 
 	@type_ids = %extras<type_id>.split(/<c>/) if %extras<type_id>.defined;
@@ -310,6 +318,9 @@ sub MAIN(
 		}
 
 		if %extras<quantity>.defined {
+			die "Invalid argument for quantity.\n"
+				unless %extras<quantity> ~~ Int;
+
 			my $ql = $checkQl(%extras<quantity>);
 			%filters.push: {
 				quantity => { compareQuantity($_<quantity>, $ql) }
@@ -317,6 +328,8 @@ sub MAIN(
 		}
 
 		if %extras<runs>.defined {
+			die "Invalid argument for --runs.\n" unless %extras<runs> ~~ Int;
+
 			my $ql = $checkQl(%filters<runs>);
 			%filters.push: {
 				runs => { compareQuantity($_<runs> , $ql); }
@@ -324,33 +337,54 @@ sub MAIN(
 		}
 	}
 
-	%filters.push: {
-		is_singleton => {
-			$_<is_singleton>.Bool == %extras<is_singleton>.Bool
-		}
-	} if %extras<is_singleton>.defined;
+	if %extras<is_singleton>.defined {
+		die "Invalid value for --is_singleton.\n"
+			unless %extras<is_singleton>.Str.lc eq <1 0 true false>;
 
-	%filters.push: {
-		item_id => {
-			$_<item_id> == %extras<item_id>.split(/<c>/).map( *.Int ).any
+		%filters.push: {
+			is_singleton => {
+				$_<is_singleton>.Bool == %extras<is_singleton>.Bool
+			}
 		}
-	} if %extras<item_id>.defined;
+	}
+
+	if %extras<item_id>.defined {
+		die "Invalid value for --item_id\n"
+			unless %extras<item_id> ~~ Int;
+
+		%filters.push: {
+			item_id => {
+				$_<item_id> == %extras<item_id>.split(/<c>/).map( *.Int ).any
+			}
+		}
+	}
 
 	%filters.push: {
 		type_id => { $_<type_id> == @type_ids.any }
 	} if +@type_ids;
 
 	%filters.push: {
-		location_type => { $_<location_type> == @location_types.any }
+		location_type => { $_<location_type> eq @location_types.any }
 	} if +@location_types;
 
 	%filters.push: {
-		location_flag => { $_<location_flag> == @location_flags.any }
+		location_flag => { $_<location_flag> eq @location_flags.any }
 	} if +@location_flags;
 
 	if %extras<is-original>.defined || %extras<is-copy>.defined {
 		die "Cannot specify --is-original or --is-copy at the same time."
 			if %extras<is-original>.defined && %extras<is-copy>.defined;
+
+		die "Invalid value for --is-original.\n"
+			unless
+				%extras<is-original>.defined &&
+				%extras<is-original>.Str.lc eq <1 0 true false>;
+
+		die "Invalid value for --is-copy.\n"
+			unless
+				%extras<is-copy>.defined &&
+				%extras<is-copy>.Str.lc eq <1 0 true false>;
+
 		%filters.push: {
 			is-original => {
 			  (%extras<is-original> // !%extras<is-copy>) ??
@@ -403,6 +437,7 @@ SEARCH TYPES
   --corp            Search corporation assets
   --char            Search character assets [default]
 
+	--bp
   --blueprints      Add blueprints into search results
   --bponly          ONLY search for blueprints
 
@@ -429,7 +464,6 @@ EXTRA OPTIONS
                       spaces, surround the entire argument in quotes.
 
   BLUEPRINT FILTERS
-    --name            Name of Blueprint
     --is-copy         If blueprint is a copy
     --is-original     If blueprint is original
     --runs            Matches number of runs left on a blueprint. Uses quantity

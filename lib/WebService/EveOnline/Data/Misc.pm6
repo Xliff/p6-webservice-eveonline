@@ -19,6 +19,7 @@ our @valid-location-flags is export = <
   FighterTube3
   FighterTube4
   FleetHangarHangar
+  Hangar
   HangarAll
   HiSlot0
   HiSlot1
