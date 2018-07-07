@@ -54,4 +54,13 @@ class WebService::EveOnline::ESI::Assets {
 		$!char-api.getAssetNames(@item_ids, :$datasource);
 	}
 
+	# THESE ARE CONVENIENCE FUNCTIONS, BECAUSE BLUEPRINTS *ARE* ASSETS!
+	method getCharacterBlueprints(:$datasource) {
+		$!char-api.getBlueprints(:$datasource);
+	}
+
+	method getCorporationBlueprints(:$datasource) {
+		$!corp-api.getBlueprints(:$datasource);
+	}
+
 }

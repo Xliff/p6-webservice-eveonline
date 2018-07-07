@@ -81,6 +81,8 @@ sub findItems(%filters, $searches) {
 		:scopes(<
 		  esi-assets.read_assets.v1
 		  esi-assets.read_corporation_assets.v1
+			esi-corporations.read_blueprints.v1
+			esi-character.read_blueprints.v1
 		>),
 	  :realm<ESI>,
 	  :section<assetSearch>
@@ -90,9 +92,8 @@ sub findItems(%filters, $searches) {
 	my $asset-api = WebService::EveOnline::ESI::Assets.new($sso);
 
 	my %found-items = ( char => [], corp => [] );
-	for $searches<what> -> $w {
-		my @filtered = %filters.keys;
-
+	my @filtered = %filters.keys;
+	for $searches<what>.List -> $w {
 		my $grepSub = sub (*@a) {
 			for @filtered -> $k {
 				return False unless %filters{$k}(@a[0]);
