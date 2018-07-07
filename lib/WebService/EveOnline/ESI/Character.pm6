@@ -232,9 +232,14 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/bookmarks/folders/", :$datasource);
 	}
 
-	method getBlueprints(:$datasource) {
+	method getBlueprints(:$filter, :$datasource) {
 		self.checkScope('esi-characters.read_blueprints.v1');
-		self.requestByPrefix("{ self.sso.characterID }/blueprints/", :$datasource, :paged);
+		self.requestByPrefix(
+			"{ self.sso.characterID }/blueprints/",
+			:$filter,
+			:$datasource,
+			:paged
+		);
 	}
 
 	method getCalendarEvents(:$datasource) {

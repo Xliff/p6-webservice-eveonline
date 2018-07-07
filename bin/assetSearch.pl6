@@ -82,7 +82,7 @@ sub findItems(%filters, $searches) {
 		  esi-assets.read_assets.v1
 		  esi-assets.read_corporation_assets.v1
 			esi-corporations.read_blueprints.v1
-			esi-character.read_blueprints.v1
+			esi-characters.read_blueprints.v1
 		>),
 	  :realm<ESI>,
 	  :section<assetSearch>
@@ -290,6 +290,10 @@ sub MAIN(
 				|( %extras<name>      // () ).split(/<c>/)
 			).unique.grep( *.chars )
 		);
+
+		#DEBUG#
+		say "TYPEIDS";
+		@type_ids.gist.say;
 	}
 
 	@systems.append: %extras<system_ids>.split(/<c>/) if %extras<system_id>.defined;
@@ -340,7 +344,7 @@ sub MAIN(
 
 	if %extras<is_singleton>.defined {
 		die "Invalid value for --is_singleton.\n"
-			unless %extras<is_singleton>.Str.lc eq <1 0 true false>;
+			unless %extras<is_singleton>.Str.lc eq <1 0 true false>.any;
 
 		%filters.push: {
 			is_singleton => {
@@ -416,7 +420,9 @@ sub MAIN(
 		stations  => { checkLocation('stations', @stations, $_) }
 	} if +@stations;
 
+	#DEBUG#
 	%filters.gist.say;
+
 	showResults( findItems(%filters, $search) );
 }
 
