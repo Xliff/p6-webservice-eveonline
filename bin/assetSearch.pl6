@@ -288,10 +288,10 @@ sub MAIN(
 		# There is a lot of work being done, here.
 		@type_ids.append: resolveItemNames(
 			(
-				|( %extras<item_name> // () ).split(/<c>/),
-				|( %extras<item-name> // () ).split(/<c>/),
-				|( %extras<names>     // () ).split(/<c>/),
-				|( %extras<name>      // () ).split(/<c>/)
+				|( %extras<item_name> // '' ).split(/<c>/),
+				|( %extras<item-name> // '' ).split(/<c>/),
+				|( %extras<names>     // '' ).split(/<c>/),
+				|( %extras<name>      // '' ).split(/<c>/)
 			).unique.grep( *.chars )
 		);
 	}
@@ -338,6 +338,8 @@ sub MAIN(
 
 		if %extras<te>.defined {
 			my $ql = $checkQl('--te', %extras<te>);
+			die "Time efficiency must be an integer between 0 and 10.\n"
+				unless $ql[1] <= 10;
 			%filters.push: {
 				time_efficiency => { compareQuantity($_<te> , $ql); }
 			};
@@ -345,6 +347,8 @@ sub MAIN(
 
 		if %extras<time_efficiency>.defined {
 			my $ql = $checkQl('--time_efficiency', %extras<time_efficiency>);
+			die "Time efficiency must be an integer between 0 and 10.\n"
+				unless $ql[1] <= 10;
 			%filters.push: {
 				time_efficiency => { compareQuantity($_<time_efficiency> , $ql); }
 			};
@@ -352,6 +356,8 @@ sub MAIN(
 
 		if %extras<me>.defined {
 			my $ql = $checkQl('--me', %extras<me>);
+			die "Material efficiency must be an integer between 0 and 10.\n"
+				unless $ql[1] <= 10;
 			%filters.push: {
 				material_efficiency => { compareQuantity($_<me> , $ql); }
 			};
@@ -359,6 +365,8 @@ sub MAIN(
 
 		if %extras<material_efficiency>.defined {
 			my $ql = $checkQl('--material_efficiency', %extras<material_efficiency>);
+			die "Material efficiency must be an integer between 0 and 10.\n"
+				unless $ql[1] <= 10;
 			%filters.push: {
 				material_efficiency => { compareQuantity($_<material_efficiency> , $ql); }
 			};
@@ -377,7 +385,7 @@ sub MAIN(
 	}
 
 	if %extras<item_id>.defined {
-		die "Invalid value for --item_id\n"
+		die "Invalid value for --item_id.\n"
 			unless %extras<item_id> ~~ Int;
 
 		%filters.push: {
@@ -424,7 +432,10 @@ sub MAIN(
 	}
 
 	my @loc-search = (+@systems, +@regions, +@stations);
-	die "Too many location based searches specified. Please choose a single type of location search."
+	die q:to/DIE/
+Too many location based searches specified. Please choose a single type of
+location search.
+DIE
 		unless @loc-search.one || @loc-search.none;
 
 	# system
@@ -461,25 +472,28 @@ REQUIRED
                       ./Eve_Static.sqlite3
                       ./data/Eve_Static.sqlite3
                       ../data/Eve_Static.sqlite3
-                    Then the file can be specified using this option.
+                   Then the file can be specified using this option.
 
 SEARCH TYPES
-  --corp            Search corporation assets
-  --char            Search character assets [default]
+  --corp           Search corporation assets
+  --char           Search character assets [default]
 
 	--bp
-  --blueprints      Add blueprints into search results
-  --bponly          ONLY search for blueprints
+  --blueprints     Add blueprints into search results
+
+  --bponly         ONLY search on blueprints
 
 EXTRA OPTIONS
 
   ASSET FILTERS
-    --is_singleton
+    --is_singleton    Only one item in the stack (?)
     --item_id         Comma separated list of item_ids
-    --location_flag
+    --location_flag   Filter by location flag. Please see the following page for
+		                  the exhaustive list.
     --location_id     Numeric location ID
-    --location_type
-    --type_id         Comma separated list of type_ids
+    --location_type   Filter by location type: 'solarsystem', 'station' or
+                      'other'.
+    --type_id         Comma separated list of numeric type_ids
     --quantity        Match the number of items in a stack. Quantity logic can be
                       specified by the following methods:
                         >[num] - At least #num items in stack
