@@ -8,6 +8,7 @@ use JSON::Fast;
 
 our $sq_dbh is export;
 
+# DEPRECATED
 grammar Cookie_Grammar {
     regex TOP {
         [\s* <cookie> ',' ?]*
@@ -32,7 +33,7 @@ grammar Cookie_Grammar {
 }
 
 sub arrayToHash($a, $k) is export {
-  $a.map({ $_{$k} => $_ }).Hash
+  $a.map({ $_{$k} => $_ }).Hash;
 }
 
 sub urlEncode($s) is export {
@@ -43,6 +44,7 @@ sub prepParams($l) is export {
 	$l.map({ $_[1] = urlEncode($_[1]); $_.join('='); }).join('&');
 }
 
+# DEPRECATED
 sub cookieExtra($c, $f) is export {
 	for $c<extras> -> $e {
 		return $e{$f} if $e{$f}.defined;
@@ -50,11 +52,13 @@ sub cookieExtra($c, $f) is export {
 	Nil;
 }
 
+# DEPRECATED
 sub cookieExtraVal($c, $f) is export {
 	 my $k = cookieExtra($c, $f);
 	 $k.defined ?? $k<value> !! Nil;
 }
 
+# DEPRECATED
 sub getCookies($r) is export {
 	my @cookies;
 	my $broken_cookies =

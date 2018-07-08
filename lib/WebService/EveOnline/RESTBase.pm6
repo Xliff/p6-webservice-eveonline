@@ -113,7 +113,7 @@ class WebService::EveOnline::RESTBase {
 				last if $page++ >= $maxPage;
 			}
 		}
-		$retVal<data> .= grep($filter) if $filter.defined;
+		$retVal<filtered> = [ $retVal<data>.grep($filter).flat ] if $filter.defined;
 		$retVal;
 	}
 
@@ -133,12 +133,16 @@ class WebService::EveOnline::RESTBase {
 		:$headers,
 		:$cache_ttl,
 		:$force,
-		:$ua
+		:$body,
+		:$ua,
+		:$contentType = 'application/x-www-form-urlencoded'
 	) {
-		$.sso.refreshToken if $.sso.defined && DateTime.now > $.sso.expires;
-
-		my $newHeaders = $.sso.getHeader;
-		$newHeaders.append($headers.pairs);
+		my $newHeaders;
+		if $!sso.defined {
+			$!sso.refreshToken if DateTime.now > $!sso.expires;
+		  $newHeaders = $!sso.getHeader;
+			$newHeaders.append($headers.pairs);
+		}
 
 		my $data = callwith(
 			$url,
@@ -147,6 +151,8 @@ class WebService::EveOnline::RESTBase {
 			:$cache_ttl,
 			:$force,
 			:$ua,
+			:$body,
+			:$contentType,
 			:json
 		);
 
@@ -205,6 +211,10 @@ class WebService::EveOnline::RESTBase {
 
 	method getPrefix {
 		$!request-prefix;
+	}
+
+	method postBody($url, :$body, :$contentType) {
+		self.makeRequest($url, :method(RequestMethod::POST), :$body, :$contentType);
 	}
 
 	# method postBody($url, $content, :$content-type, :$bin = False) {

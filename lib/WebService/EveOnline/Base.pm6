@@ -64,7 +64,7 @@ class WebService::EveOnline::Base {
 
 		$!cache_ttl = $cache_ttl if $cache_ttl.defined;
 		$!cache_key = $cache_key if $cache_key.defined;
-		if ($!cache_ttl.defined || $!cache_key.defined) {
+		if $!cache_ttl.defined || $!cache_key.defined {
 			$!cache_prefix = $cache_prefix.defined ??
 				$cache_prefix
 				!!
@@ -271,10 +271,12 @@ class WebService::EveOnline::Base {
 		:$method = GET,
 		:$headers,
 		:$form,
+    :$body,
 		:$cache_ttl = $!cache_ttl,
 		:$cache_key = $!cache_key,
 		:$force,
 		:$json,
+    :$contentType = 'application/x-www-form-urlencoded',
     :$ua
 	) {
 		my $response;
@@ -282,10 +284,9 @@ class WebService::EveOnline::Base {
 		die "Invalid value '$method' used for method."
 			unless $method ~~ RequestMethod;
 
-		die "Headers are undefined." unless $headers.defined;
-
-		die "Header value should be a Hash, not { $headers.WHAT }."
-			unless $headers ~~ Hash;
+    my $usedHeaders = $headers // {};
+		die "Header value should be a Hash, not { $usedHeaders.WHAT }."
+			unless $usedHeaders ~~ Hash;
 
 		my $cf;
 		if (
@@ -316,28 +317,38 @@ class WebService::EveOnline::Base {
 		$response = await do given $method {
 			when RequestMethod::GET {
         my $wc = $ua.defined ?? $ua !! $!http_client;
-				$wc.get($url, :headers([ $headers.pairs ]));
+				$wc.get(
+          $url,
+          headers => [ $usedHeaders.pairs ]
+        );
 			}
 
 			when RequestMethod::POST {
+        # cw: Note the use of $form and $body are inconsistent, this is due
+        #     to the various redesigns that I have made with no time to
+        #     insure said consistency.
+        say "BASE-P: { $url }";
 		    $!http_client.post(
           $url,
-          content-type => 'application/x-www-form-urlencoded',
-                  body => $form,
-               headers => [ $headers.pairs ]
+          content-type => $contentType,
+                  body => $body,
+               headers => [ $usedHeaders.pairs ]
         );
 			}
 
 			when RequestMethod::DELETE {
-				$!http_client.delete($url, :headers([ $headers.pairs ]));
+				$!http_client.delete(
+          $url,
+          headers => [ $usedHeaders.pairs ]
+        );
 			}
 
 			when RequestMethod::PUT {
 				$!http_client.put(
           $url,
-          content-type => 'application/x-www-form-urlencoded',
+          content-type => $contentType,
                   body => $form,
-               headers => [ $headers.pairs ]
+               headers => [ $usedHeaders.pairs ]
         );
 			}
 		};

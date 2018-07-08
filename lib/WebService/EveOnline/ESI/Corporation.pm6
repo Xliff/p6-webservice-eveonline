@@ -1,5 +1,6 @@
 use v6.c;
 
+use WebService::EveOnline::Utils;
 use WebService::EveOnline::ESI::Base;
 
 class WebService::EveOnline::ESI::Corporation {
@@ -53,9 +54,13 @@ DIE
       unless $filter ~~ (Block, Routine, WhateverCode).any;
 
     self.checkScope('esi-assets.read_corporation_assets.v1');
-    self.requestByPrefix(
+
+    my $ret = self.requestByPrefix(
       "{ $!corporationID }/assets/", :$filter, :$datasource, :paged
     );
+		$ret<data>     = arrayToHash($ret<data>, 'item_id');
+		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
+		$ret;
   }
 
   method getAssetLocations (@item_ids, :$datasource) {
@@ -63,9 +68,12 @@ DIE
     die "<item_ids> must be a list of integers"
       unless @item_ids.all() ~~ Int;
 
-    self.postByPrefix(
+    self.sso.tokenData.gist.say;
+    @item_ids.gist.say;
+
+    self.postJSONByPrefix(
       "{ $!corporationID }/assets/locations/",
-      to-json(@item_ids),
+      :body(@item_ids),
       :$datasource,
     );
   }
@@ -73,9 +81,9 @@ DIE
   method getAssetNames(@item_ids, :$datasource) {
     self.checkScope('esi-assets.read_corporation_assets.v1');
 
-    self.postByPrefix(
+    self.postJSONByPrefix(
       "{ $!corporationID }/assets/names/",
-      to-json(@item_ids),
+      :body(@item_ids),
       :$datasource
     );
   }
@@ -93,9 +101,13 @@ DIE
   method getBlueprints(:$filter, :$datasource) {
     # cw: [Optional] add single page retrieval
     self.checkScope('esi-corporations.read_blueprints.v1');
-    self.requestByPrefix(
+
+    my $ret = self.requestByPrefix(
       "{ $!corporationID }/blueprints/", :$filter, :$datasource, :paged
     );
+    $ret<data>     = arrayToHash($ret<data>, 'item_id');
+		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
+		$ret;
   }
 
   method getContacts(:$datasource) {

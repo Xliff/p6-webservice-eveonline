@@ -2,6 +2,10 @@ use v6.c;
 
 unit package WebService::EveOnline::Data::Misc;
 
+sub   is-a-system($l) is export { $l ~~ 30000000..32000000 }
+sub is-an-abyssal($l) is export { $l ~~ 32000000..33000000 }
+sub  is-a-station($l) is export { $l ~~ 60000000..64000000 }
+
 our @valid-location-types is export = <station solar-system other>;
 
 our @valid-location-flags is export = <

@@ -56,10 +56,10 @@ class WebService::EveOnline::ESI::Base {
 		$url;
 	}
 
-	method postBodyByPrefix($prefix, $content, :$datasource, *%args) {
+	method postJSONByPrefix($prefix, :$body, :$datasource, *%args) {
 		my $url = self!buildUrl($prefix, :$datasource, :%args);
 
-		self.postBody($url, $content);
+		self.postBody($url, :$body, :contentType<application/json>);
 	}
 
   method requestByPrefix(

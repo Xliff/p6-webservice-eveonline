@@ -9,48 +9,52 @@ class WebService::EveOnline::ESI::Universe {
 		self.appendPrefix("/{ self.type }/universe/");
 	}
 
+	method new(:$sso) {
+		self.bless(:$sso);
+	}
+
 	method getBloodlines(:$datasource, :$language) {
-		self.getRequestByPrefix('bloodlines/', :$datasource, :$language);
+		self.requestByPrefix('bloodlines/', :$datasource, :$language);
 	}
 
 	method getCategories(:$datasource) {
-		self.getRequestByPrefix('bloodlines/', :$datasource);
+		self.requestByPrefix('bloodlines/', :$datasource);
 	}
 
 	method getCategory($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("categories/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("categories/{ $id }/", :$datasource, :$language);
 	}
 
 	method getConstellations(:$datasource) {
-		self.getRequestByPrefix('constellations/', :$datasource);
+		self.requestByPrefix('constellations/', :$datasource);
 	}
 
 	method getConstellation($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("constellations/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("constellations/{ $id }/", :$datasource, :$language);
 	}
 
 	method getFactions(:$datasource) {
-		self.getRequestByPrefix('factions/', :$datasource);
+		self.requestByPrefix('factions/', :$datasource);
 	}
 
 	method getGraphics(:$datasource) {
-		self.getRequestByPrefix('graphics/', :$datasource);
+		self.requestByPrefix('graphics/', :$datasource);
 	}
 
 	method getGraphic($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("graphics/{ $id }/", :$datasource);
+		self.requestByPrefix("graphics/{ $id }/", :$datasource);
 	}
 
 	method getGroups(:$datasource) {
-		self.getRequestByPrefix('groups/', :$datasource);
+		self.requestByPrefix('groups/', :$datasource);
 	}
 
 	method getGroup($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("groups/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("groups/{ $id }/", :$datasource, :$language);
 	}
 
 	method getIDs(@names, :$datasource) {
@@ -65,7 +69,7 @@ class WebService::EveOnline::ESI::Universe {
 
 	method getMoon($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("moons/{ $id }/", :$datasource);
+		self.requestByPrefix("moons/{ $id }/", :$datasource);
 	}
 
 	method getNames(@ids, :$datasource) {
@@ -80,75 +84,80 @@ class WebService::EveOnline::ESI::Universe {
 
 	method getPlanet($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("planets/{ $id }", :$datasource);
+		self.requestByPrefix("planets/{ $id }", :$datasource);
 	}
 
 	method getRaces(:$datasource, :$language) {
-		self.getRequestByPrefix('names/', :$datasource, :$language);
+		self.requestByPrefix('names/', :$datasource, :$language);
 	}
 
 	method getRegions(:$datasource) {
-		self.getRequestByPrefix('regions/', :$datasource);
+		self.requestByPrefix('regions/', :$datasource);
 	}
 
 	method getRegion($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("regions/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("regions/{ $id }/", :$datasource, :$language);
 	}
 
 	method getSchematics($id, :$datasource) {
-		die "<schematicID> must be an Integer." $id ~~ Int;
+		die "<schematicID> must be an Integer." unless $id ~~ Int;
 		self.requestByPrefix("schematics/{ $id }/", :$datasource);
 	}
 
 	method getStargate($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stargates/{ $id }/", :$datasource);
+		self.requestByPrefix("stargates/{ $id }/", :$datasource);
 	}
 
 	method getStar($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stars/{ $id }/", :$datasource);
+		self.requestByPrefix("stars/{ $id }/", :$datasource);
 	}
 
 	method getStation($id, :$datasource) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("stars/{ $id }/", :$datasource);
+		self.requestByPrefix("stars/{ $id }/", :$datasource);
 	}
 
 	method getStructures(:$datasource) {
-		self.getRequestByPrefix('structures/');
+		self.requestByPrefix('structures/', :$datasource);
 	}
 
 	method getStructure($id, :$datasource) {
+		die "No authorization has been provided for this method."
+			unless self.sso.defined;
+
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("structures/{ $id }/", :$datasource);
+
+		self.checkScope('esi-universe.read_structures.v1');
+		self.requestByPrefix("structures/{ $id }/", :$datasource);
 	}
 
 	method getSystemJumps(:$datasource) {
-		self.getRequestByPrefix('system_jumps/', :$datasource);
+		self.requestByPrefix('system_jumps/', :$datasource);
 	}
 
 	method getSystemKills(:$datasource) {
-		self.getRequestByPrefix('system_kills/', :$datasource);
+		self.requestByPrefix('system_kills/', :$datasource);
 	}
 
 	method getSystems(:$datasource) {
-		self.getRequestByPrefix('systems/', :$datasource);
+		self.requestByPrefix('systems/', :$datasource);
 	}
 
 	method getSystem($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("systems/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("systems/{ $id }/", :$datasource, :$language);
 	}
 
 	method getTypes(:$datasource) {
-		self.getRequestByPrefix('types/', :$datasource);
+		self.requestByPrefix('types/', :$datasource);
 	}
 
 	method getType($id, :$datasource, :$language) {
 		die "ID must resolve to an integer!" unless $id ~~ Int;
-		self.getRequestByPrefix("types/{ $id }/", :$datasource, :$language);
+		self.requestByPrefix("types/{ $id }/", :$datasource, :$language);
 	}
 
 }

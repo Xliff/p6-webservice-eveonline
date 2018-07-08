@@ -1,7 +1,6 @@
 use v6.c;
 
-use JSON::Fast;
-
+use WebService::EveOnline::Utils;
 use WebService::EveOnline::ESI::Base;
 
 class WebService::EveOnline::ESI::Character {
@@ -28,9 +27,9 @@ class WebService::EveOnline::ESI::Character {
 			unless @contacts.map( *.Int ).all() ~~ Int;
 
 		self.checkScope('esi-characters.write_contacts.v1');
-		self.postBodyByPrefix(
+		self.postJSONByPrefix(
 			"{ self.sso.characterID }/contacts/",
-			to-json(@contacts),
+			:body(@contacts),
 			:$datasource
 		);
 	}
@@ -61,9 +60,9 @@ DIE
 				||
 				( %fitting<ship_type_id> && %fitting<ship_type_id> ~~ Int );
 
-		self.postBodyByPrefix(
+		self.postJSONByPrefix(
 			"{ self.sso.characterID }/fittings/",
-			to-json(%fitting),
+			:body(%fitting),
 			:$datasource
 		);
 	}
@@ -87,9 +86,9 @@ DIE
 			);
 
 		self.checkScope('esi-mail.organize_mail.v1');
-		self.postBodyByPrefix(
+		self.postJSONByPrefix(
 			"{ self.sso.characterID }/mail/labels/",
-			to-json(%label),
+			:body(%label),
 			:$datasource
 		);
 	}
@@ -160,7 +159,7 @@ DIE
 
 		self.putByPrefix(
 			"{ self.sso.characterID }/contacts/",
-			to-json(@contacts),
+			:body(@contacts),
 			:$datasource,
 			|%usedChanges
 		);
@@ -175,8 +174,10 @@ DIE
 		die "<characterIDs> must be a list of integers"
 			unless @characters.all() ~~ Int;
 
-		self.postBodyByPrefix(
-			'affiliation/', to-json(@characters), :$datasource
+		self.postJSONByPrefix(
+			'affiliation/',
+			:body(@characters),
+			:$datasource
 		);
 	}
 
@@ -194,7 +195,13 @@ DIE
 		# Hold this until we know if :$pages will stick around.
 		my $url = "{ self.sso.characterID }/assets/";
 
-		self.requestByPrefix($url, :$filter, :$datasource, :paged);
+		my $ret = self.requestByPrefix($url, :$filter, :$datasource, :paged);
+
+		$ret.gist.say;
+
+		$ret<data>     = arrayToHash($ret<data>, 'item_id');
+		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
+		$ret;
 	}
 
 	method getAssetLocations (@item_ids, :$datasource) {
@@ -203,16 +210,18 @@ DIE
 
 		die "<item_ids> must be a list of integers" unless @item_ids.all() ~~ Int;
 
-		self.postBodyByPrefix(
-			"{ $cid }/assets/locations/", to-json(@item_ids), :$datasource
+		self.postJSONByPrefix(
+			"{ $cid }/assets/locations/",
+			:body(@item_ids),
+			:$datasource
 		);
 	}
 
 	method getAssetNames(@item_ids, :$datasource) {
 		self.checkScope('esi-assets.read_assets.v1');
-		self.postBodyByPrefix(
+		self.postJSONByPrefix(
 			"{ self.sso.charachterID }/assets/names/",
-			to-json(@item_ids),
+			:body(@item_ids),
 			:$datasource
 		);
 	}
@@ -234,12 +243,16 @@ DIE
 
 	method getBlueprints(:$filter, :$datasource) {
 		self.checkScope('esi-characters.read_blueprints.v1');
-		self.requestByPrefix(
+
+		my $ret = self.requestByPrefix(
 			"{ self.sso.characterID }/blueprints/",
 			:$filter,
 			:$datasource,
 			:paged
 		);
+		$ret<data>     = arrayToHash($ret<data>, 'item_id');
+		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
+		$ret;
 	}
 
 	method getCalendarEvents(:$datasource) {
@@ -265,7 +278,7 @@ DIE
 		self.checkScope('esi-calendar.respond_calendar_events.v1');
 		self.putBodyByPrefix(
 			"{ self.sso.characterID }/calendar/{ $eventid }/",
-			to-json({ response => $response });
+			:body({ response => $response });
 			:$datasource,
 		);
 	}
@@ -331,8 +344,10 @@ DIE
 		die "<characterIDs> must be a list of integers"
 			unless @characterIDs.map( *.Int ).all() ~~ Int;
 
-		self.postBodyByPrefix(
-			"{ $cid }/cspa/", to-json(@characterIDs), :$datasource
+		self.postJSONByPrefix(
+			"{ $cid }/cspa/",
+			:body(@characterIDs),
+			:$datasource
 		);
 	}
 
@@ -582,9 +597,9 @@ DIE
 			);
 
 		self.checkScope('esi-mail.send_mail.v1');
-		self.postBodyByPrefix(
+		self.postJSONByPrefix(
 			"{ self.sso.characterID }/mail/",
-			to-json(%mail-data),
+			:body(%mail-data),
 			:$datasource
 		);
 	}
@@ -612,7 +627,7 @@ DIE
 
 		self.putByPrefix(
 			"{ self.sso.characterID }/mail/{ $mid }/",
-			to-json(%usedUpdates),
+			:body(%usedUpdates),
 			:$datasource,
 		);
 	}

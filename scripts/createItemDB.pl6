@@ -119,10 +119,11 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
   print "Adding stations...";
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		CREATE TABLE Stations (
-			stationID INTEGER PRIMARYY KEY NOT NULL,
+			stationID INTEGER PRIMARY KEY NOT NULL,
 			security INTEGER,
 			solarSystemID INTEGER,
 			regionID INTEGER,
+			constellationID INTEGER,
 			stationName VARCHAR(100),
 			x DOUBLE NOT NULL,
 			y DOUBLE NOT NULL,
@@ -145,13 +146,26 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	$o_sth.execute();
 
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE INDEX Stations_Constellation_idx ON Stations(constellationID)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		CREATE INDEX Stations_Name_idx ON Stations(stationName)
 	STATEMENT
 
 	$o_sth.execute();
 
 	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
-		SELECT stationID, security, solarSystemID, regionID, stationName, x, y, z
+		SELECT
+			stationID,
+			security,
+			solarSystemID,
+			constellationID,
+			regionID,
+			stationName,
+			x, y, z
 		FROM staStations
 		ORDER BY stationID
   STATEMENT
@@ -160,9 +174,9 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 
 	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
 		INSERT INTO Stations (
-			stationID, security, solarSystemID, regionID, stationName, x, y, z
+			stationID, security, solarSystemID, constellationID, regionID, stationName, x, y, z
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	STATEMENT
 
 	@data = $i_sth.allrows(:array-of-hash);
@@ -172,10 +186,72 @@ sub MAIN (Str :$user!, Str :$password!, Str :$host = "localhost", Str :$database
 	    	$_<stationID>,
 	    	$_<security>,
 	    	$_<solarSystemID>,
+				$_<constellationID>,
 	    	$_<regionID>,
-	    	$_<stationName>
+	    	$_<stationName>,
+				$_<x>, $_<y>, $_<z>
 		);
-		print '.' if $cnt++ % 500 == 0;
+		print '.' if $cnt++ % 100 == 0;
+	}
+  $i_sth.finish;
+	say "({$cnt})";
+
+	print "Adding constellations...";
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		CREATE TABLE Constellations (
+		  constellationID INTEGER PRIMARY KEY NOT NULL,
+			regionID INTEGER,
+			x DOUBLE,
+			y DOUBLE,
+			z DOUBLE,
+			xMin DOUBLE,
+			xMax DOUBLE,
+			yMin DOUBLE,
+			yMax DOUBLE,
+			zMin DOUBLE,
+			zMax DOUBLE,
+			radius FLOAT
+		)
+	STATEMENT
+
+	$o_sth.execute();
+
+	$i_sth = $i_dbh.prepare(q:to/STATEMENT/);
+		SELECT
+			constellationID, regionID,
+			x, y, z, radius,
+			xMin, xMax,
+			yMin, yMax,
+			zMin, zMax
+		FROM mapConstellations
+		ORDER BY constellationID
+	STATEMENT
+
+	$i_sth.execute();
+
+	$o_sth = $o_dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO Constellations (
+			constellationID, regionID,
+			x, y, z, radius,
+			xMin, xMax,
+			yMin, yMax,
+			zMin, zMax
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	STATEMENT
+
+	@data = $i_sth.allrows(:array-of-hash);
+	$cnt = 0;
+	for @data {
+	    $o_sth.execute(
+				$_<constellationID>,
+				$_<regionID>,
+				$_<x>, $_<y>, $_<z>, $_<radius>,
+				$_<xMin>, $_<xMax>,
+				$_<yMin>, $_<yMax>,
+				$_<zMin>, $_<zMax>
+			);
+		print '.' if $cnt++ % 100 == 0;
 	}
   $i_sth.finish;
 	say "({$cnt})";
