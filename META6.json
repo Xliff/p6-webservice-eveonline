@@ -17,12 +17,11 @@
     "clifton.wood@gmail.com"
   ],
   "depends" : [
-	  "Inline::Perl5",
 	  "Config::INI",
 	  "Data::Dumper",
 	  "DBIish",
 	  "DateTime::Parse",
-	  "HTTP::UserAgent",
+	  "Cro::HTTP::Client",
 	  "JSON::Fast",
 	  "Base64",
 	  "HTML::Parser::XML",

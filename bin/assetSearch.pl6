@@ -74,19 +74,52 @@ sub checkLocation($t, @list, $i) {
 	True;
 }
 
-sub resolveLocations(%items, %filters) {
-	my @location-based = %filters<ADDITIONAL>.flat;
-	my %pSL = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
+# Resolve what gets passed down, since the item MUST be returned with a
+# resolved location.
+{
+	my %privateStructures;
 
-	my %usedItems := %items<filtered>:exists ?? %items<filtered> // %items;
-	for %usedItems.pairs -> $p {
-	  given $p.value<location_id> {
+	sub resolveLocation($i, $ip) {
+		use WebService::EveOnline::Alliance;
+		use WebService::EveOnline::Corporations;
+
+		if $ip.defined {
+			my $unr = $ip;
+		} else {
+			# Get private corporation structures.
+			my $corp = WebService::EveOnline::Corporations.new($sso);
+			%privateStructures = arrayToHash(
+				$corp.getStructures(),
+				'structure_id'
+			);
+			# Get alliance corporation List
+			my $alliance = WebService::EveOnline::Alliance.new($sso);
+			my $alliance-corps = $alliance.getCorporations();
+			for $alliance-corps -> $ac {
+				my $corpStructures = $corp.getStructures($ac);
+
+				%privateStructures.append: arrayToHash($corpStructures, 'structure_id')
+					if $corpStructures;
+
+				CATCH {
+					# Silent fail all API errors.
+					# DO NOT LEAVE AS DEFAULT. ONLY WANT TO CATCH API ERRORS.
+					default {
+						.resume
+					}
+				}
+			}
+		}
+
+		given $unr<location_id> {
 			# In known space
 			when is-a-system($_) {
+				$i<system_id> = $_;
 			}
 
 			# In a station
 			when is-a-station($_) {
+				$i<station_id> = $_;
 			}
 
 			when is-an-abyssal($_) {
@@ -97,17 +130,40 @@ sub resolveLocations(%items, %filters) {
 
 			# In a public structure (aka citadel)
 			when %pSL{$_} {
+				# Search the structure for a system id
+				#my $found-system-id = checkStructureID(%pSL{$_})
+				$i<structure_id> = $_;
+				#$i<system_id> = $found-system-id;
+			}
+
+			# In a private structure
+			when %privateStructures{$_} {
+
 			}
 
 			# In the the list of assets.
 			when %items<data>{$_} {
+				resolveLocation(
+					$i,
+					%items<data>{ %items<data>{$_}<location_id> }
+				);
 			}
 
 			# In an unknown place (LIMBO!)
 			default {
-				note "Item { $p.value<item_id> } has a location_id that cannot be resolved.";
+				note "Item { $i<item_id> } has a location_id that cannot be resolved.";
 			}
 		}
+	}
+}
+
+sub filterLocations(%items, %filters) {
+	my @location-based = %filters<ADDITIONAL>.flat;
+	my %pSL = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
+
+	my %usedItems := %items<filtered>:exists ?? %items<filtered> // %items;
+	for %usedItems.pairs -> $p {
+	  my $item = resolveLocation($p.value);
 	  # Retrieve location data. (mandatory)
 	  # for <char corp> -> $c {
 	  # 	%locations{$c} = do given $c {
@@ -152,6 +208,7 @@ sub findItems(%filters, $searches) {
 		  esi-assets.read_corporation_assets.v1
 			esi-corporations.read_blueprints.v1
 			esi-characters.read_blueprints.v1
+			esi-universe.read_structures.v1
 		>),
 	  :realm<ESI>,
 	  :section<assetSearch>
@@ -225,58 +282,6 @@ sub showResults(%items) {
 	%items.gist.say;
 }
 
-sub resolveItemNames(*@names) {
-	my $sql = qq:to/STATEMENT/;
-	  SELECT typeID
-	  FROM invTypes
-	  WHERE typeName IN (
-			{ @names.map({ "'{ $_ }'" }).join(',') }
-	  )
-	STATEMENT
-
-	my $sth = $sq_dbh.prepare($sql);
-	$sth.execute();
-	$sth.allrows().flat;
-}
-
-sub resolveRegionNames(@names, @regions) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
-	  SELECT s.*
-	  FROM SolSystems s
-		INNER JOIN Regions r ON r.regionID = s.regionID
-	  WHERE
-			r.regionName IN (
-				{ @names.map( "'{ * }'" ).join(',') }
-		  )
-			OR
-			r.regionID in (
-			  { @regions.join(',') }
-			)
-	STATEMENT
-
-	$sth.execute();
-	arrayToHash(
-		$sth.allrows(:array-of-hash),
-		'solarSystemID'
-	);
-}
-
-sub resolveSystemNames(@names) {
-	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
-	  SELECT *
-	  FROM SolSystems
-	  WHERE solarSystemName IN (
-			{ @names.map( "'{ * }'" ).join(',') }
-	  )
-	STATEMENT
-
-	$sth.execute();
-	arrayToHash(
-		$sth.allrows(:array-of-hash),
-		'solarSystemID'
-	);
-}
-
 sub MAIN(
 	:$sqlite,
 	:$corp,
@@ -332,6 +337,8 @@ sub MAIN(
 		 	unless @location_types.all eq @valid-location-types.any;
 	}
 
+	openStaticDB($sqlite);
+
 	@type_ids = %extras<type_id>.split(/<c>/) if %extras<type_id>.defined;
 	if [||] (
 		%extras<item_name>.defined,
@@ -339,8 +346,6 @@ sub MAIN(
 		%extras<names>.defined,
 		%extras<name>.defined;
 	) {
-		$sq_dbh = openStaticDB($sqlite);
-
 		# There is a lot of work being done, here.
 		@type_ids.append: resolveItemNames(
 			(
