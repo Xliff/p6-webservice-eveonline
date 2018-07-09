@@ -10,7 +10,7 @@ use WebService::EveOnline::Data::Misc;
 use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Universe;
 
-my (%inv, %manifest, %assets, $asset-api);
+my (%inv, %manifest, %assets, $asset-api, $universe);
 
 my @valid-filters = <
 	is_singleton
@@ -47,6 +47,7 @@ sub compareQuantity($num, $l) {
 	}
 }
 
+# MAY BE DEPRECATED.
 sub checkLocation($t, @list, $i) {
 	my @loc = do given $t {
 		when 'systems' | 'regions' {
@@ -55,7 +56,13 @@ sub checkLocation($t, @list, $i) {
 					$i<xMin> <= $_<x> <= $i<xMax>,
 					$i<yMin> <= $_<y> <= $i<yMax>,
 					$i<zMin> <= $_<z> <= $i<zMax>
-				);
+				)
+				||
+				[+](
+					($_<x> - $i<x>) ** 2,
+					($_<y> - $i<y>) ** 2,
+					($_<z> - $i<z>) ** 2
+				) < $i<radius> ** 2
 			});
 		}
 
@@ -79,36 +86,45 @@ sub checkLocation($t, @list, $i) {
 {
 	my %privateStructures;
 
-	sub resolveLocation($i, $ip) {
+	sub getResolutionInformation {
 		use WebService::EveOnline::Alliance;
 		use WebService::EveOnline::Corporations;
 
-		if $ip.defined {
-			my $unr = $ip;
-		} else {
-			# Get private corporation structures.
-			my $corp = WebService::EveOnline::Corporations.new($sso);
-			%privateStructures = arrayToHash(
-				$corp.getStructures(),
-				'structure_id'
-			);
-			# Get alliance corporation List
-			my $alliance = WebService::EveOnline::Alliance.new($sso);
-			my $alliance-corps = $alliance.getCorporations();
-			for $alliance-corps -> $ac {
-				my $corpStructures = $corp.getStructures($ac);
+		# Get private corporation structures.
+		my $corp = WebService::EveOnline::Corporations.new($sso);
+		%privateStructures = arrayToHash(
+			$corp.getStructures(),
+			'structure_id'
+		);
+		# Get alliance corporation List
+		my $alliance = WebService::EveOnline::Alliance.new($sso);
+		my $alliance-corps = $alliance.getCorporations();
+		for $alliance-corps -> $ac {
+			my $corpStructures = $corp.getStructures($ac);
 
-				%privateStructures.append: arrayToHash($corpStructures, 'structure_id')
-					if $corpStructures;
+			%privateStructures.append(
+				arrayToHash($corpStructures, 'structure_id')
+			) if $corpStructures;
 
-				CATCH {
-					# Silent fail all API errors.
-					# DO NOT LEAVE AS DEFAULT. ONLY WANT TO CATCH API ERRORS.
-					default {
+			CATCH {
+				# Silent fail all API errors.
+				when X::Cro::HTTP::Error::Client {
+					if .response.status == (401, 403).any {
+						my $i = $corp.getInformation($ac);
+						note "Cannot get structures from the '$i<name>' corporation.";
 						.resume
 					}
 				}
 			}
+		}
+	}
+
+	sub resolveLocation($i, $ip?) {
+		if $ip.defined {
+			$unr = $ip;
+		} else {
+			$unr = $i;
+			getResolutionInformation() unless +%privateStructures;
 		}
 
 		given $unr<location_id> {
@@ -116,31 +132,26 @@ sub checkLocation($t, @list, $i) {
 			when is-a-system($_) {
 				$i<system_id> = $_;
 			}
-
 			# In a station
 			when is-a-station($_) {
-				$i<station_id> = $_;
-			}
+				my $station = $universe.getStation($_);
 
+				$i<station_id> = $_;
+				$i<system_id> = $station<system_id>;
+			}
 			when is-an-abyssal($_) {
 				# WAT!? RILLY?
 				# (this should never happen)
 				note "Item { $p.value<item_id> } is in an abyssal system!";
 			}
-
 			# In a public structure (aka citadel)
-			when %pSL{$_} {
-				# Search the structure for a system id
-				#my $found-system-id = checkStructureID(%pSL{$_})
-				$i<structure_id> = $_;
-				#$i<system_id> = $found-system-id;
+			when %publicStructures{$_} {
+				$i<structure_id system_id> = %publicStructures{$_}<structure_id system_id>;
 			}
-
 			# In a private structure
 			when %privateStructures{$_} {
-
+				$i<structure_id system_id> = %privateStructures{$_}<structure_id system_id>
 			}
-
 			# In the the list of assets.
 			when %items<data>{$_} {
 				resolveLocation(
@@ -148,7 +159,6 @@ sub checkLocation($t, @list, $i) {
 					%items<data>{ %items<data>{$_}<location_id> }
 				);
 			}
-
 			# In an unknown place (LIMBO!)
 			default {
 				note "Item { $i<item_id> } has a location_id that cannot be resolved.";
@@ -159,7 +169,7 @@ sub checkLocation($t, @list, $i) {
 
 sub filterLocations(%items, %filters) {
 	my @location-based = %filters<ADDITIONAL>.flat;
-	my %pSL = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
+	my %publicStructures = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
 
 	my %usedItems := %items<filtered>:exists ?? %items<filtered> // %items;
 	for %usedItems.pairs -> $p {
@@ -200,23 +210,6 @@ sub filterLocations(%items, %filters) {
 }
 
 sub findItems(%filters, $searches) {
-	my $u = WebService::EveOnline::Universe.new;
-
-	my $sso = WebService::EveOnline::SSO.new(
-		:scopes(<
-		  esi-assets.read_assets.v1
-		  esi-assets.read_corporation_assets.v1
-			esi-corporations.read_blueprints.v1
-			esi-characters.read_blueprints.v1
-			esi-universe.read_structures.v1
-		>),
-	  :realm<ESI>,
-	  :section<assetSearch>
-	);
-
-	# Add in :type, later.
-	my $asset-api = WebService::EveOnline::ESI::Assets.new($sso);
-
 	my %empty = (
 		char => {
 			data     => {},
@@ -299,6 +292,22 @@ sub MAIN(
 		|@additional-filters,
 		|@aliases
 	);
+
+	my $sso = WebService::EveOnline::SSO.new(
+		:scopes(<
+			esi-assets.read_assets.v1
+			esi-assets.read_corporation_assets.v1
+			esi-corporations.read_blueprints.v1
+			esi-characters.read_blueprints.v1
+			esi-universe.read_structures.v1
+		>),
+		:realm<ESI>,
+		:section<assetSearch>
+	);
+	$universe = WebService::EveOnline::Universe.new($sso);
+
+	# Add in :type, later.
+	$asset-api = WebService::EveOnline::ESI::Assets.new($sso);
 
 	my $search = {
 		where => 'char',
