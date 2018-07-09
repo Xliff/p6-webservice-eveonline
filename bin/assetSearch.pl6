@@ -6,6 +6,7 @@ use DBIish;
 
 use WebService::EveOnline::SSO;
 use WebService::EveOnline::Utils;
+use WebService::EveOnline::Data;
 use WebService::EveOnline::Data::Misc;
 use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Universe;
@@ -38,6 +39,7 @@ my @additional-filters = <
 >;
 
 my @aliases = <item-name name names te me>;
+my $sso;
 
 sub compareQuantity($num, $l) {
 	do given $l[0] {
@@ -81,100 +83,97 @@ sub checkLocation($t, @list, $i) {
 	True;
 }
 
-# Resolve what gets passed down, since the item MUST be returned with a
-# resolved location.
-{
-	my %privateStructures;
+sub getPrivateInformation(%privateStructures) {
+	use WebService::EveOnline::ESI::Alliance;
+	use WebService::EveOnline::ESI::Corporation;
 
-	sub getResolutionInformation {
-		use WebService::EveOnline::Alliance;
-		use WebService::EveOnline::Corporations;
+	# Get private corporation structures.
+	my $corp = WebService::EveOnline::Corporation.new($sso);
+	%privateStructures = arrayToHash(
+		$corp.getStructures(),
+		'structure_id'
+	);
+	# Get alliance corporation List
+	my $alliance = WebService::EveOnline::Alliance.new($sso);
+	my $alliance-corps = $alliance.getCorporations();
+	for $alliance-corps -> $ac {
+		my $corpStructures = $corp.getStructures($ac);
 
-		# Get private corporation structures.
-		my $corp = WebService::EveOnline::Corporations.new($sso);
-		%privateStructures = arrayToHash(
-			$corp.getStructures(),
-			'structure_id'
-		);
-		# Get alliance corporation List
-		my $alliance = WebService::EveOnline::Alliance.new($sso);
-		my $alliance-corps = $alliance.getCorporations();
-		for $alliance-corps -> $ac {
-			my $corpStructures = $corp.getStructures($ac);
+		%privateStructures.append(
+			arrayToHash($corpStructures, 'structure_id')
+		) if $corpStructures;
 
-			%privateStructures.append(
-				arrayToHash($corpStructures, 'structure_id')
-			) if $corpStructures;
-
-			CATCH {
-				# Silent fail all API errors.
-				when X::Cro::HTTP::Error::Client {
-					if .response.status == (401, 403).any {
-						my $i = $corp.getInformation($ac);
-						note "Cannot get structures from the '$i<name>' corporation.";
-						.resume
-					}
+		CATCH {
+			# Silent fail all API errors.
+			when X::Cro::HTTP::Error::Client {
+				if .response.status == (401, 403).any {
+					my $i = $corp.getInformation($ac);
+					note "Cannot get structures from the '$i<name>' corporation.";
+					.resume
 				}
 			}
 		}
 	}
+}
 
-	sub resolveLocation($i, $ip?) {
-		if $ip.defined {
-			$unr = $ip;
-		} else {
-			$unr = $i;
-			getResolutionInformation() unless +%privateStructures;
+my (%privateStructures, %publicStructures);
+sub resolveLocation(%items, $i, $ip?) {
+	my $unr;
+
+	if $ip.defined {
+		$unr = $ip;
+	} else {
+		$unr = $i;
+		getPrivateInformation(%privateStructures) unless +%privateStructures;
+	}
+
+	given $unr<location_id> {
+		# In known space
+		when is-a-system($_) {
+			$i<system_id> = $_;
 		}
+		# In a station
+		when is-a-station($_) {
+			my $station = $universe.getStation($_);
 
-		given $unr<location_id> {
-			# In known space
-			when is-a-system($_) {
-				$i<system_id> = $_;
-			}
-			# In a station
-			when is-a-station($_) {
-				my $station = $universe.getStation($_);
-
-				$i<station_id> = $_;
-				$i<system_id> = $station<system_id>;
-			}
-			when is-an-abyssal($_) {
-				# WAT!? RILLY?
-				# (this should never happen)
-				note "Item { $p.value<item_id> } is in an abyssal system!";
-			}
-			# In a public structure (aka citadel)
-			when %publicStructures{$_} {
-				$i<structure_id system_id> = %publicStructures{$_}<structure_id system_id>;
-			}
-			# In a private structure
-			when %privateStructures{$_} {
-				$i<structure_id system_id> = %privateStructures{$_}<structure_id system_id>
-			}
-			# In the the list of assets.
-			when %items<data>{$_} {
-				resolveLocation(
-					$i,
-					%items<data>{ %items<data>{$_}<location_id> }
-				);
-			}
-			# In an unknown place (LIMBO!)
-			default {
-				note "Item { $i<item_id> } has a location_id that cannot be resolved.";
-			}
+			$i<station_id> = $_;
+			$i<system_id> = $station<system_id>;
+		}
+		when is-an-abyssal($_) {
+			# WAT!? RILLY?
+			# (this should never happen)
+			note "Item { $p.value<item_id> } is in an abyssal system!";
+		}
+		# In a public structure (aka citadel)
+		when %publicStructures{$_} {
+			$i<structure_id system_id> = %publicStructures{$_}<structure_id system_id>;
+		}
+		# In a private structure
+		when %privateStructures{$_} {
+			$i<structure_id system_id> = %privateStructures{$_}<structure_id system_id>
+		}
+		# In the the list of assets.
+		when %items<data>{$_} {
+			resolveLocation(
+				%items,
+				$i,
+				%items<data>{ %items<data>{$_}<location_id> }
+			);
+		}
+		# In an unknown place (LIMBO!)
+		default {
+			note "Item { $i<item_id> } has a location_id that cannot be resolved.";
 		}
 	}
 }
 
 sub filterLocations(%items, %filters) {
 	my @location-based = %filters<ADDITIONAL>.flat;
-	my %publicStructures = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
+	%publicStructures = $universe.getStructures()<data>.map({ $_ => 1 }).Hash;
 
-	my %usedItems := %items<filtered>:exists ?? %items<filtered> // %items;
+	my %usedItems := %items<filtered>:exists ?? %items<filtered> !! %items;
 	for %usedItems.pairs -> $p {
-	  my $item = resolveLocation($p.value);
-	  # Retrieve location data. (mandatory)
+	  my $item = resolveLocation(%usedItems, $p.value);
 	  # for <char corp> -> $c {
 	  # 	%locations{$c} = do given $c {
 	  # 		when 'char' {
@@ -268,7 +267,9 @@ sub findItems(%filters, $searches) {
 		}
 	}
 
-	%found-items;
+	filterLocations(%found-items, %filters);
+
+	%found-items,
 }
 
 sub showResults(%items) {
@@ -293,7 +294,7 @@ sub MAIN(
 		|@aliases
 	);
 
-	my $sso = WebService::EveOnline::SSO.new(
+	$sso = WebService::EveOnline::SSO.new(
 		:scopes(<
 			esi-assets.read_assets.v1
 			esi-assets.read_corporation_assets.v1
@@ -528,11 +529,8 @@ DIE
 	%filters.gist.say;
 	%location-filters.gist.say;
 
-	showResults(
-		resolveLocations(
-			findItems(%filters, $search),
-			%location-filters
-		)
+	showResults( findItems(%filters, $search),
+
 	);
 }
 
