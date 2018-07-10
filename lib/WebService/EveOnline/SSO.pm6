@@ -180,11 +180,22 @@ class WebService::EveOnline::SSO {
 				content-type	=> 'application/x-www-form-urlencoded',
 				body					=> $form_data
 			);
+			say "!HANDLELOGIN -- response { $response.status }";
 
 			# If we get a redirect from the POST, preserve the response.
 			# cw: Update for Cro
 			CATCH {
-				when X::HTTP::Response { $response = .response; }
+
+				when X::Cro::HTTP::Error::Client {
+					say "Response died with an exception:";
+					say "Status: { .response.status }";
+					say "Message: { .response.message }";
+
+					say "Body\n----\n{ $response.gist.say }";
+				}
+
+				when X::HTTP::Response           { $response = .response; }
+
 			}
 		}
 
@@ -237,11 +248,15 @@ class WebService::EveOnline::SSO {
 				}
 
 				when X::Cro::HTTP::Error::Client {
-					.response.request.headers.gist.say;
-					$response = .response;
+					say "Response died with an exception:";
+					say "Status: { .response.status }";
+					say "Message: { .response.message }";
+
+					say "Body\n----\n{ $response.gist.say }";
 				}
 			}
 		}
+		say "!HANDLELOGIN(2) -- response { $response.status }";
 		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		die "HTTP request to '$url' failed!" unless self!is-success($response);
@@ -325,9 +340,17 @@ class WebService::EveOnline::SSO {
 			);
 
 			CATCH {
-				when X::HTTP::Response { $response = .response }
+				when X::HTTP::Response           { $response = .response }
+				when X::Cro::HTTP::Error::Client {
+					say "Response died with an exception:";
+					say "Status: { .response.status }";
+					say "Message: { .response.message }";
+
+					say "Body\n----\n{ $response.gist.say }";
+				}
 			}
 		}
+		say "!HANDLECHARSELECT -- response { $response.status }";
 		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		# cw: This will be a redirect, but it needs to be a GET, not
@@ -359,7 +382,7 @@ class WebService::EveOnline::SSO {
 		#  	$form_data,
 	 	#  	:Authorization("Basic { self!encodeAuth }"),
 	  # );
-		await $!client.post(
+		my $response = await $!client.post(
 	  	"{ PREFIX }/oauth/token",
 			content-type	=> 'application/x-www-form-urlencoded',
 	  	body          => $form_data,
@@ -368,6 +391,10 @@ class WebService::EveOnline::SSO {
 				password => %!privateData{$!section}<secret_id>
 			}
 	  );
+
+		say "!GETBEARERTOKEN -- Response: { $response.status }";
+
+		$response;
 	}
 
 	method !setTokenData($newTokenData) {
@@ -409,6 +436,8 @@ class WebService::EveOnline::SSO {
 		# cw: Should throw an exception, instead.
 		die "HTTP request to '$url' failed!" unless self!is-success($response);
 
+		say "GETTOKEN -- Response: { $response.status }";
+
 		$!client.headers.push(
 			|$response.headers.grep( *.name eq 'Request-Context' )
 		);
@@ -440,6 +469,8 @@ class WebService::EveOnline::SSO {
 			next unless $f<name>.defined;
 			%!fieldsInForm{$f<name>} = 1;
 		}
+
+		%!fieldsInForm.gist.say;
 
 		$response = self!handleCharSelect if %!fieldsInForm<CharacterId>;
 
