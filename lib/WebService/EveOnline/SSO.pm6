@@ -87,7 +87,7 @@ class WebService::EveOnline::SSO {
 	}
 
 	method !is-success($r) {
-		200 >= $r.status < 300;
+		200 <= $r.status < 300;
 	}
 
 	method !encodeAuth {
@@ -120,7 +120,6 @@ class WebService::EveOnline::SSO {
 			#realm				      => %.privateData<_><realm>
 		};
 		#$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
-
 		for $!xmldoc.elements(:TAG<input>, :type<hidden>, :RECURSE(100)).List -> $hf {
 			$form_data{$hf<name>} = $hf<value>;
 		}
@@ -194,6 +193,11 @@ class WebService::EveOnline::SSO {
 			CATCH {
 				# cw: Update for Cro
 				when X::HTTP::NoResponse {
+					$response = .response;
+				}
+
+				when X::Cro::HTTP::Error::Client {
+					.response.request.headers.gist.say;
 					$response = .response;
 				}
 			}
@@ -328,6 +332,7 @@ class WebService::EveOnline::SSO {
 		$!tokenData = $newTokenData;
 		$!lastTokenDate = DateTime.now;
 		$!expires = $.lastTokenDate.later(:seconds($.tokenData<expires_in>));
+		$!tokenData.gist.say;
 	}
 
 	method getHeader {

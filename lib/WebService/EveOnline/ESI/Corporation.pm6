@@ -1,5 +1,6 @@
 use v6.c;
 
+use WebService::EveOnline::SSO;
 use WebService::EveOnline::Utils;
 use WebService::EveOnline::ESI::Base;
 
@@ -23,7 +24,7 @@ class WebService::EveOnline::ESI::Corporation {
   }
 
   method !getCorpId($corpId?) {
-    my $cid = $corpId // self.corporation_id;
+    my $cid = $corpId // self.corporation-id;
 
     die "<corporationID> must be an integer" unless $cid.Int ~~ Int;
 
@@ -262,9 +263,10 @@ DIE
     self.requestByPrefix("{ $!corporationID }/starbases/{ $starbase_id }/", :$datasource);
   }
 
-  method getStructures(:$datasource) {
+  method getStructures($corpId?, :$datasource) {
+    my $cid = self!getCorpId($corpId);
     self.checkScope('esi-corporations.read_structures.v1');
-    self.requestByPrefix("{ $!corporationID }/structures/", :$datasource);
+    self.requestByPrefix("{ $cid }/structures/", :$datasource);
   }
 
   method getTitles(:$datasource) {

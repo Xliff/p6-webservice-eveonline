@@ -10,16 +10,23 @@ class WebService::EveOnline::ESI::Alliance {
 
 	submethod TWEAK {
 		self.appendPrefix("/{ self.type }/alliances/");
+
+		# Must use TWEAK here since this is a convenience class. There are no
+		# attributes that can be handled in BUILD.
+		use WebService::EveOnline::ESI::Corporation;
+
+    my $corp = WebService::EveOnline::ESI::Corporation.new( :sso(self.sso) );
+		my $i = $corp.getInformation( :type(self.type) );
+
+		die "Cannot get corporation information!" unless $i && $i<data>;
+
+		$!corp-id = $corp.corporation-id;
+    $!alliance_id = $i<data><alliance_id>;
 	}
 
-	submethod BUILD {
-    use WebService::EveOnline::ESI::Corporation;
-
-    my $corp = WebService::EveOnline::ESI::Corporation.new(self.sso);
-		my $i = $corp.getInformation( :type(self.type) );
-		$!corp-id = $i<corporationID>;
-    $!alliance_id = $i<alliance_id>;
-  }
+	method new(:$sso) {
+		self.bless(:$sso);
+	}
 
 	method character-id {
 		self.sso.characterID;

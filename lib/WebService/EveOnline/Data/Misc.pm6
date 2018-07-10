@@ -2,11 +2,26 @@ use v6.c;
 
 unit package WebService::EveOnline::Data::Misc;
 
-sub   is-a-system($l) is export { $l ~~ 30000000..32000000 }
-sub is-an-abyssal($l) is export { $l ~~ 32000000..33000000 }
-sub  is-a-station($l) is export { $l ~~ 60000000..64000000 }
+sub   is-a-system($l) is export { $l.Int ~~ 30000000..32000000 }
+sub is-an-abyssal($l) is export { $l.Int ~~ 32000000..33000000 }
+sub  is-a-station($l) is export { $l.Int ~~ 60000000..64000000 }
 
 our @valid-location-types is export = <station solar-system other>;
+
+our @valid-structure-states is export = <
+  anchor_vulnerable
+  anchoring
+  armor_reinforce
+  armor_vulnerable
+  fitting_invulnerable
+  hull_reinforce
+  hull_vulnerable
+  online_deprecated
+  onlining_vulnerable
+  shield_vulnerable
+  unanchored
+  unknown
+>;
 
 our @valid-location-flags is export = <
   AssetSafety
@@ -89,3 +104,35 @@ our @valid-location-flags is export = <
   Unlocked
   Wardrobe
 >;
+
+our @valid-station-services is export = <
+  assasination-missions
+  black-market
+  bounty-missions
+  cloning
+  courier-missions
+  dna-therapy
+  docking
+  factory
+  fitting
+  gambling
+  insurance
+  interbus
+  jump-clone-facility
+  labratory
+  loyalty-point-store
+  market
+  navy-offices
+  news
+  office-rental
+  paintshop
+  refinery
+  repair-facilities
+  reprocessing-plant
+  security-offices
+  stock-exchange
+  storage
+  surgery
+>;
+
+our @valid-service-states is export = <online offline cleanup>;

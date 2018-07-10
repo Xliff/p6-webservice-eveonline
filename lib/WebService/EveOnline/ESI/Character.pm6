@@ -197,8 +197,6 @@ DIE
 
 		my $ret = self.requestByPrefix($url, :$filter, :$datasource, :paged);
 
-		$ret.gist.say;
-
 		$ret<data>     = arrayToHash($ret<data>, 'item_id');
 		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
 		$ret;

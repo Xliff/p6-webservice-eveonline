@@ -4,11 +4,15 @@ use v6.c;
 
 use DBIish;
 
+use Data::Dump::Tree;
+
 use WebService::EveOnline::SSO;
 use WebService::EveOnline::Utils;
 use WebService::EveOnline::Data;
 use WebService::EveOnline::Data::Misc;
+use WebService::EveOnline::ESI::Alliance;
 use WebService::EveOnline::ESI::Assets;
+use WebService::EveOnline::ESI::Corporation;
 use WebService::EveOnline::ESI::Universe;
 
 my (%inv, %manifest, %assets, $asset-api, $universe);
@@ -83,37 +87,39 @@ sub checkLocation($t, @list, $i) {
 	True;
 }
 
+my ($corp, $alliance);
 sub getPrivateInformation(%privateStructures) {
-	use WebService::EveOnline::ESI::Alliance;
-	use WebService::EveOnline::ESI::Corporation;
-
 	# Get private corporation structures.
-	my $corp = WebService::EveOnline::Corporation.new($sso);
+	$corp //= WebService::EveOnline::ESI::Corporation.new(:$sso);
 	%privateStructures = arrayToHash(
-		$corp.getStructures(),
+		$corp.getStructures()<data>,
 		'structure_id'
 	);
+
 	# Get alliance corporation List
-	my $alliance = WebService::EveOnline::Alliance.new($sso);
-	my $alliance-corps = $alliance.getCorporations();
-	for $alliance-corps -> $ac {
-		my $corpStructures = $corp.getStructures($ac);
+	#$alliance //= WebService::EveOnline::ESI::Alliance.new(:$sso);
+	#my $alliance-corps = $alliance.getCorporations();
 
-		%privateStructures.append(
-			arrayToHash($corpStructures, 'structure_id')
-		) if $corpStructures;
+	#ddt $alliance-corps, :max_depth(3);
 
-		CATCH {
-			# Silent fail all API errors.
-			when X::Cro::HTTP::Error::Client {
-				if .response.status == (401, 403).any {
-					my $i = $corp.getInformation($ac);
-					note "Cannot get structures from the '$i<name>' corporation.";
-					.resume
-				}
-			}
-		}
-	}
+	# for $alliance-corps<data>.List -> $ac {
+	# 	my $ci = $corp.getInformation($ac)<data>;
+	# 	my $acs = $corp.getStructures($ac);
+	# 	if $acs && $acs<data> {
+	# 		%privateStructures{$_} = $ac for $acs<data>;
+	# 	}
+	#
+	# 	CATCH {
+	# 		# Silent fail all API errors.
+	# 		when X::Cro::HTTP::Error::Client {
+	# 			if .response.status == (401, 403).any {
+	# 				my $i = $corp.getInformation($ac);
+	# 				note "Cannot get structures from the '$ci<name>' corporation.";
+	# 				#.resume
+	# 			}
+	# 		}
+	# 	}
+	# }
 }
 
 my (%privateStructures, %publicStructures);
@@ -136,33 +142,51 @@ sub resolveLocation(%items, $i, $ip?) {
 		when is-a-station($_) {
 			my $station = $universe.getStation($_);
 
-			$i<station_id> = $_;
-			$i<system_id> = $station<system_id>;
+			$i<station_id system_id> = ($_, $station<data><system_id>)
+				if $station && $station<data>;
 		}
 		when is-an-abyssal($_) {
 			# WAT!? RILLY?
 			# (this should never happen)
-			note "Item { $p.value<item_id> } is in an abyssal system!";
+			note "Item #{ $p.value<item_id> } is in an abyssal system!";
 		}
 		# In a public structure (aka citadel)
 		when %publicStructures{$_} {
-			$i<structure_id system_id> = %publicStructures{$_}<structure_id system_id>;
+			$_.gist.say;
+
+			my $si = $universe.getStructure($_); #$corp.getAssetNames($_.Array);
+
+			#ddt $si, :max_depth(3);
+
+			# $i<structure_id system_id station_name> = (
+			# 	$_,
+			# 	$s<data><solar_system_id>,
+			# 	$s<data><name>
+			# ) if $s && $s<data>;
 		}
 		# In a private structure
 		when %privateStructures{$_} {
-			$i<structure_id system_id> = %privateStructures{$_}<structure_id system_id>
+			#my $s = $universe.getStructure($_);
+
+			$i<structure_id system_id> = %privateStructures<structure_id system_id>;
 		}
 		# In the the list of assets.
 		when %items<data>{$_} {
+			$_.say;
+			ddt %items<data>{$_};
+
+			my $pid = %items<data>{$_}<location_id>;
+
+			say "Resolving parent... #{ $pid }";
 			resolveLocation(
 				%items,
 				$i,
-				%items<data>{ %items<data>{$_}<location_id> }
+				%items<data>{$pid}
 			);
 		}
 		# In an unknown place (LIMBO!)
 		default {
-			note "Item { $i<item_id> } has a location_id that cannot be resolved.";
+			note "Item #{ $i<item_id> } has a location_id that cannot be resolved.";
 		}
 	}
 }
@@ -171,40 +195,45 @@ sub filterLocations(%items, %filters) {
 	my @location-based = %filters<ADDITIONAL>.flat;
 	%publicStructures = $universe.getStructures()<data>.map({ $_ => 1 }).Hash;
 
-	my %usedItems := %items<filtered>:exists ?? %items<filtered> !! %items;
-	for %usedItems.pairs -> $p {
-	  my $item = resolveLocation(%usedItems, $p.value);
-	  # for <char corp> -> $c {
-	  # 	%locations{$c} = do given $c {
-	  # 		when 'char' {
-	  # 			$asset-api.getCharacterAssetLocations(
-	  # 				%found-items{$c}.keys.map( *.Int )
-	  # 			);
-	  # 	  }
-	  # 		when 'corp' {
-	  # 			$asset-api.getCorporationAssetLocations(
-	  # 				%found-items{$c}.keys.map( *.Int )
-	  # 			);
-	  # 		}
-	  # 	}
-	  # 	for %locations{$c}.keys -> $k {
-	  # 		if %found-items{$c}{$k}:exists {
-	  # 			#%found-items{$c}{$k}<item_id>:delete;
-	  # 			%found-items{$c}{$k}.append: %locations{$c}{$k}.pairs;
-	  # 		}
-	  # 	}
-	  #
-	  # 	# location data is now with the item. Now need to filter. Turns result back into an array.
-	  # 	# Note that location-based searching uses inverse logic than asset-based.
-	  # 	if +@location-based {
-	  # 		%found-items{$c} = %found-items{$c}.pairs.grep({
-	  # 			for @location-based -> $l {
-	  # 				return True if $l.value( $_.value );
-	  # 			}
-	  # 			False;
-	  # 		});
-	  # 	}
-	  # }
+	# Must resolve corp vs char assets.
+	for <char corp> -> $c {
+		my %usedItems := %items{$c}<filtered>:exists ??
+			%items{$c}<filtered> !! %items{$c}<data>;
+
+		for %usedItems.pairs -> $p {
+	  	my $item = resolveLocation(%usedItems, $p.value);
+	  	# for <char corp> -> $c {
+	  	# 	%locations{$c} = do given $c {
+	  	# 		when 'char' {
+	  	# 			$asset-api.getCharacterAssetLocations(
+	  	# 				%found-items{$c}.keys.map( *.Int )
+	  	# 			);
+	  	# 	  }
+	  	# 		when 'corp' {
+	  	# 			$asset-api.getCorporationAssetLocations(
+	  	# 				%found-items{$c}.keys.map( *.Int )
+	  	# 			);
+	  	# 		}
+	  	# 	}
+	  	# 	for %locations{$c}.keys -> $k {
+	  	# 		if %found-items{$c}{$k}:exists {
+	  	# 			#%found-items{$c}{$k}<item_id>:delete;
+	  	# 			%found-items{$c}{$k}.append: %locations{$c}{$k}.pairs;
+	  	# 		}
+	  	# 	}
+	  	#
+	  	# 	# location data is now with the item. Now need to filter. Turns result back into an array.
+	  	# 	# Note that location-based searching uses inverse logic than asset-based.
+	  	# 	if +@location-based {
+	  	# 		%found-items{$c} = %found-items{$c}.pairs.grep({
+	  	# 			for @location-based -> $l {
+	  	# 				return True if $l.value( $_.value );
+	  	# 			}
+	  	# 			False;
+	  	# 		});
+	  	# 	}
+	  	# }
+		}
 	}
 }
 
@@ -234,35 +263,48 @@ sub findItems(%filters, $searches) {
 		my $assets;
 		given $w {
 			when 'asset' {
-				@filtered .= grep(* ne @additional-bp-filters.all);
-
 				my $a;
-				if $searches<where>.any eq <all char>.any {
-					$a = $asset-api.getCharacterAssets( :filter($grepSub) );
-					%found-items<char><data>.append($a<data>);
-					%found-items<char><filtered>.append($a<filtered>) if $a<filtered>:exists;
-				}
 
-				if $searches<where>.any eq <all corp>.any {
-					$a = $asset-api.getCorporationAssets( :filter($grepSub) );
-					%found-items<corp><data>.append: $a<data>;
-					%found-items<corp><filtered>.append($a<filtered>) if $a<filtered>:exists;
+				@filtered .= grep(* ne @additional-bp-filters.all);
+				given $searches<where> {
+					#
+					when 'all' | 'char' {
+						$a = $asset-api.getCharacterAssets( :filter($grepSub) );
+						%found-items<char><data>.append($a<data>.pairs.flat);
+
+						$a<filtered>.gist.say;
+
+						%found-items<char><filtered>.append($a<filtered>.pairs.flat)
+							if $a<filtered>:exists;
+					}
+					#
+					when 'all' | 'corp' {
+						$a = $asset-api.getCorporationAssets( :filter($grepSub) );
+						%found-items<corp><data>.append($a<data>.pairs.flat);
+						%found-items<corp><filtered>.append($a<filtered>.pairs.flat)
+							if $a<filtered>:exists;
+					}
 				}
 			}
 
 			when 'bp' {
 				my $a;
-				if $searches<where>.any eq <all char>.any {
-					$a = $asset-api.getCharacterBlueprints( :filter($grepSub) );
-					%found-items<char><data>.append($a<data>);
-					%found-items<char><filtered>.append($a<filtered>) if $a<filtered>:exists;
+				given $searches<where> {
+					#
+					when 'all' | 'char' {
+						$a = $asset-api.getCharacterBlueprints( :filter($grepSub) );
+						%found-items<char><data>.append($a<data>.flat);
+						%found-items<char><filtered>.append($a<filtered>.flat)
+							if $a<filtered>:exists;
+					}
+					#
+					when 'all' | 'char' {
+						$a = $asset-api.getCorporationBlueprints( :filter($grepSub) );
+					  %found-items<corp><data>.append($a<data>.flat);
+					  %found-items<corp><filtered>.append($a<filtered>.flat)
+							if $a<filtered>:exists;
+				  }
 				}
-
-				if $searches<where>.any eq <all corp>.any {
-					$a = $asset-api.getCorporationBlueprints( :filter($grepSub) );
-				  %found-items<corp><data>.append($a<data>);
-				  %found-items<corp><filtered>.append($a<filtered>) if $a<filtered>:exists;
-			  }
 		  }
 		}
 	}
@@ -298,17 +340,18 @@ sub MAIN(
 		:scopes(<
 			esi-assets.read_assets.v1
 			esi-assets.read_corporation_assets.v1
-			esi-corporations.read_blueprints.v1
 			esi-characters.read_blueprints.v1
+			esi-corporations.read_blueprints.v1
+			esi-corporations.read_structures.v1
 			esi-universe.read_structures.v1
 		>),
 		:realm<ESI>,
 		:section<assetSearch>
 	);
-	$universe = WebService::EveOnline::Universe.new($sso);
 
 	# Add in :type, later.
-	$asset-api = WebService::EveOnline::ESI::Assets.new($sso);
+	$asset-api = WebService::EveOnline::ESI::Assets.new(:$sso);
+	$universe = WebService::EveOnline::ESI::Universe.new(:$sso);
 
 	my $search = {
 		where => 'char',
