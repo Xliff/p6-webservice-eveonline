@@ -20,31 +20,33 @@ class WebService::EveOnline::SSO {
 	#     syntactical highlighting in the editor I use for development.
 
 	constant PREFIX = "https://login.eveonline.com";
+	constant DEFAULT_UA = 'WebService::EveOnline v0.5.0 (rakudo)';
 
-	has @.scopes;
 	has %!fieldsInForm;
-	has %.privateData;
 	has $!client;
-	#has $!postclient;
 	has $!privateFile;
 	has $!privatePrefix;
 	has $!realm;
 	has $!section;
 	has $!xmldoc;
-	has $.expires;
-	has $.lastTokenDate;
-	has $.tokenData;
 
 	# Store the Character ID selected so that consumers can query for it,
 	# later.
 	has $.characterID;
+	has $.expires;
+	has $.lastTokenDate;
+	has @.scopes;
+	has $.tokenData;
+	has %.privateData;
+
 
 	submethod BUILD(
 		:@scopes,
 		:$realm,
 		:$section,
 		:$privatePrefix,
-		:$privateFile
+		:$privateFile,
+		:$userAgent
 	) {
 		#$!client = HTTP::UserAgent.new(
 		#	:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
@@ -57,12 +59,34 @@ class WebService::EveOnline::SSO {
 
 		$!client = Cro::HTTP::Client.new(
 			:headers([
-				User-agent => 'WebService::EveOnline v0.5.0 (rakudo)'
+				User-agent => $userAgent // DEFAULT_UA
 			]),
 			:cookie-jar
 			:!follow
 		);
+		$!client.cookie-jar.add-cookie(
+			Cro::HTTP::Cookie.new(
+				:name<rating>,
+				:value<esrb>,
+				:domain<eveonline.com>,
+				:path</>,
+				:expires( DateTime.now.later(:90days) ),
+				:max-age( Duration.new(86400.0 * 90) ),
+				:http-only(True)
+			)
+		);
 
+		$!client.cookie-jar.add-cookie(
+			Cro::HTTP::Cookie.new(
+				:name<cultureinfo>,
+				:value<cultureinfo=en-us>,
+			  :domain<eveonline.com>,
+			  :path</>,
+			  :expires( DateTime.now.later(:90days) ),
+			  :max-age( Duration.new(86400.0 * 90) ),
+			  :http-only(True)
+			)
+		);
 
 		$!privatePrefix = $privatePrefix // DEFAULT_HOME;
 		$!privateFile = "{ $!privatePrefix }/{ $privateFile // 'privateData' }";
@@ -78,8 +102,22 @@ class WebService::EveOnline::SSO {
 		self.getToken;
 	}
 
-	method new(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile) {
-		self.bless(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile);
+	method new(
+		:@scopes,
+		:$realm,
+		:$section,
+		:$privatePrefix,
+		:$privateFile,
+		:$userAgent
+	) {
+		self.bless(
+			:@scopes,
+			:$realm,
+			:$section,
+			:$privatePrefix,
+			:$privateFile,
+			:$userAgent
+		);
 	}
 
 	method characterID {
@@ -132,6 +170,8 @@ class WebService::EveOnline::SSO {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
 			$formUrl = "{ PREFIX }{ $formUrl }";
 		}
+
+		say "SSO-Init: $formUrl";
 
 		my $response;
 		{
@@ -202,6 +242,7 @@ class WebService::EveOnline::SSO {
 				}
 			}
 		}
+		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		die "HTTP request to '$url' failed!" unless self!is-success($response);
 
@@ -287,6 +328,7 @@ class WebService::EveOnline::SSO {
 				when X::HTTP::Response { $response = .response }
 			}
 		}
+		$!client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		# cw: This will be a redirect, but it needs to be a GET, not
 		#     a POST.
@@ -377,6 +419,7 @@ class WebService::EveOnline::SSO {
 		my @fields = $!xmldoc.elements(:TAG<input>, :RECURSE<100>);
 		my @sel = $!xmldoc.elements(:TAG<select>, :RECURSE<100>);
 
+		%!fieldsInForm = ();
 		for |(@fields, @sel).flat -> $f {
 			next unless $f<name>.defined;
 			%!fieldsInForm{$f<name>} = 1;
