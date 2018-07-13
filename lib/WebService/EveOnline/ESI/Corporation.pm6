@@ -68,9 +68,6 @@ DIE
     die "<item_ids> must be a list of integers"
       unless @item_ids.all() ~~ Int;
 
-    self.sso.tokenData.gist.say;
-    @item_ids.gist.say;
-
     self.postJSONByPrefix(
       "{ $!corporationID }/assets/locations/",
       :body(@item_ids),

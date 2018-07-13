@@ -6,11 +6,12 @@ use DBIish;
 
 use WebService::EveOnline::SSO;
 use WebService::EveOnline::Utils;
+use WebService::EveOnline::Data;
 use WebService::EveOnline::Data::Misc;
 use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Universe;
 
-my (%inv, %manifest, %assets, $asset-api, $universe);
+my (%inv, %manifest, %assets, $asset-api, $universe, $sso);
 
 my @valid-filters = <
 	is_singleton
@@ -83,21 +84,20 @@ sub checkLocation($t, @list, $i) {
 
 # Resolve what gets passed down, since the item MUST be returned with a
 # resolved location.
-{
-	my %privateStructures;
+	my (%privateStructures, %publicStructures);
 
 	sub getResolutionInformation {
-		use WebService::EveOnline::Alliance;
-		use WebService::EveOnline::Corporations;
+		use WebService::EveOnline::ESI::Alliance;
+		use WebService::EveOnline::ESI::Corporation;
 
 		# Get private corporation structures.
-		my $corp = WebService::EveOnline::Corporations.new($sso);
+		my $corp = WebService::EveOnline::ESI::Corporation.new($sso);
 		%privateStructures = arrayToHash(
 			$corp.getStructures(),
 			'structure_id'
 		);
 		# Get alliance corporation List
-		my $alliance = WebService::EveOnline::Alliance.new($sso);
+		my $alliance = WebService::EveOnline::ESI::Alliance.new($sso);
 		my $alliance-corps = $alliance.getCorporations();
 		for $alliance-corps -> $ac {
 			my $corpStructures = $corp.getStructures($ac);
@@ -119,7 +119,9 @@ sub checkLocation($t, @list, $i) {
 		}
 	}
 
-	sub resolveLocation($i, $ip?) {
+	sub resolveLocation(%items, $i, $ip?) {
+		my $unr;
+
 		if $ip.defined {
 			$unr = $ip;
 		} else {
@@ -165,13 +167,12 @@ sub checkLocation($t, @list, $i) {
 			}
 		}
 	}
-}
 
 sub filterLocations(%items, %filters) {
 	my @location-based = %filters<ADDITIONAL>.flat;
-	my %publicStructures = $u.getStructures()<data>.map({ $_ => 1 }).Hash;
+	%publicStructures = $universe.getStructures()<data>.map({ $_ => 1 }).Hash;
 
-	my %usedItems := %items<filtered>:exists ?? %items<filtered> // %items;
+	my %usedItems := %items<filtered>:exists ?? %items<filtered> !! %items;
 	for %usedItems.pairs -> $p {
 	  my $item = resolveLocation($p.value);
 	  # Retrieve location data. (mandatory)
@@ -293,7 +294,7 @@ sub MAIN(
 		|@aliases
 	);
 
-	my $sso = WebService::EveOnline::SSO.new(
+	$sso = WebService::EveOnline::SSO.new(
 		:scopes(<
 			esi-assets.read_assets.v1
 			esi-assets.read_corporation_assets.v1
@@ -304,10 +305,10 @@ sub MAIN(
 		:realm<ESI>,
 		:section<assetSearch>
 	);
-	$universe = WebService::EveOnline::Universe.new($sso);
 
 	# Add in :type, later.
-	$asset-api = WebService::EveOnline::ESI::Assets.new($sso);
+	$universe = WebService::EveOnline::ESI::Universe.new( :sso($sso) );
+	$asset-api = WebService::EveOnline::ESI::Assets.new( :sso($sso) );
 
 	my $search = {
 		where => 'char',
@@ -528,12 +529,11 @@ DIE
 	%filters.gist.say;
 	%location-filters.gist.say;
 
-	showResults(
-		resolveLocations(
-			findItems(%filters, $search),
-			%location-filters
-		)
+	resolveLocation(
+		findItems(%filters, $search),
+		%location-filters
 	);
+	
 }
 
 use nqp;

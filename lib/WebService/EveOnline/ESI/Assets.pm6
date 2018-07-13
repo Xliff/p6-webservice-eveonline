@@ -16,7 +16,7 @@ class WebService::EveOnline::ESI::Assets {
 		$!corp-api = WebService::EveOnline::ESI::Corporation.new( :sso(self.sso) );
 	}
 
-	method new($sso) {
+	method new(:$sso) {
 		die "A valid SSO object passed as a parameter to new() is required."
 			unless $sso ~~ ::('WebService::EveOnline::SSO');
 		self.bless(:$sso);

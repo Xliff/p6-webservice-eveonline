@@ -6,26 +6,25 @@ class WebService::EveOnline::ESI::Alliance {
 	also is WebService::EveOnline::ESI::Base;
 
 	has $!alliance_id;
-	has $!datasource;
+	has $!corp-id;
 
 	submethod TWEAK {
-		self.appendPrefix("/{ $!type }/alliances/");
-	}
+		self.appendPrefix("/{ self.type }/alliances/");
 
-	submethod BUILD(:$datasource) {
-    use WebService::EveOnline::ESI::Corporation;
-    my $corp = WebService::EveOnline::ESI::Corporation.new(self.sso);
-		$!datasource = $datasource;
-		my $i = $corp.getInformation(:datasource($!datasource));
+		use WebService::EveOnline::ESI::Corporation;
+
+		my $corp = WebService::EveOnline::ESI::Corporation.new( :sso(self.sso) );
+		my $i = $corp.getInformation( :datasource(self.type) );
+		$!corp-id = $i<corporation_id>;
     $!alliance_id = $i<alliance_id>;
-  }
+	}
 
 	method character-id {
 		self.sso.characterID;
 	}
 
 	method corporation-id {
-		$!corp-api.corporationID;
+		$!corp-id;
 	}
 
 	method alliance-id {
@@ -77,7 +76,8 @@ class WebService::EveOnline::ESI::Alliance {
 		die "<allianceIDs> must all be a list of Integer" unless @ids.all() ~~ Int;
 		# TODO - This looks like it should be a request body. Insure that assumption
 		#        is correct.
-		my %args<alliance_ids> = @ids.join(',');
+		my %args;
+		%args<alliance_ids> = @ids.join(',');
 		self.requestbyPrefix('names', :$datasource, |%args);
 	}
 
