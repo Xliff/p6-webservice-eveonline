@@ -2,42 +2,30 @@ use v6.c;
 
 use WebService::EveOnline::Base;
 
-class WebService::EveOnline::SSO {
-	use Base64;
-	use Config::INI;
-	use Cro::HTTP::Client;
-	use DateTime::Parse;
+class WebService::EveOnline::SSO is WebService::EveONline::SSOBase {
 	use HTML::Parser::XML;
 #	use HTTP::UserAgent;
 	use HTTP::Cookies;
-	use JSON::Fast;
 	use XML;
 
 	use WebService::EveOnline::Utils;
+  
+  # Entry point now looks like this: 
+  #https://login.eveonline.com/oauth/authorize/?
+  #  response_type=code&
+  #  redirect_uri=< Encoded redirect URL >&
+  #  client_id=< 3rdpartyClientId >&
+  #  scope=<list of scopes delimited by %20>&
+  #  state=< Rendom State Value >
 
 	# cw: Please note that there are places where I use backslash to quote
 	#     characters in regexes. This is solely due to not screw up the
 	#     syntactical highlighting in the editor I use for development.
 
-	constant PREFIX = "https://login.eveonline.com";
-
-	has @.scopes;
-	has %!fieldsInForm;
-	has %.privateData;
-	has $!client;
+	
 	#has $!postclient;
-	has $!privateFile;
-	has $!privatePrefix;
-	has $!realm;
-	has $!section;
 	has $!xmldoc;
-	has $.expires;
-	has $.lastTokenDate;
-	has $.tokenData;
-
-	# Store the Character ID selected so that consumers can query for it,
-	# later.
-	has $.characterID;
+  has %!fieldsInForm;
 
 	submethod BUILD(
 		:@scopes,
@@ -46,68 +34,23 @@ class WebService::EveOnline::SSO {
 		:$privatePrefix,
 		:$privateFile
 	) {
-		#$!client = HTTP::UserAgent.new(
-		#	:max-redirects(5), :useragent<WebService::EveOnline v0.0.9 (rakudo)>
-		#);
-		#
-		#$!postclient = HTTP::UserAgent.new(
-		#	:max-redirects(0),
-		#	:useragent<WebService::EveOnline v0.0.9 (rakudo)>
-		#);
 
-		$!client = Cro::HTTP::Client.new(
-			:headers([
-				User-agent => 'WebService::EveOnline v0.5.0 (rakudo)'
-			]),
-			:cookie-jar
-			:!follow
-		);
-
-
-		$!privatePrefix = $privatePrefix // DEFAULT_HOME;
-		$!privateFile = "{ $!privatePrefix }/{ $privateFile // 'privateData' }";
-		$!section = $section // '_';
-
-		@!scopes = @scopes;
-		$!realm = $realm;
-
-		self!getPrivateData;
 	}
 
 	submethod TWEAK {
 		self.getToken;
 	}
 
-	method new(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile) {
-		self.bless(:@scopes, :$realm, :$section, :$privatePrefix, :$privateFile);
-	}
-
-	method characterID {
-		$!characterID;
-	}
-
-	method !is-success($r) {
-		200 >= $r.status < 300;
-	}
-
-	method !encodeAuth {
-		encode-base64(
-			#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
-			%!privateData{$!section}<client_id secret_id>.join(':'), '', :str
-		);
-	}
-
-	method !getPrivateData {
-		# Override this to implement custom data retrieval method.
-		# cw: Consider using a callback to implement custom retrieval rather
-		#     than forced subclassing.
-		%!privateData = Config::INI::parse($!privateFile.IO.slurp)
-				if $!privateFile.IO.e
-	}
-
-	method !getState {
-		# Override to implement custom state value generation.
-		'variable' ~ (^999).pick;
+	method new(
+    :@scopes, 
+    :$realm, 
+    :$section, 
+    :$privatePrefix, 
+    :$privateFile
+  ) {
+		self.bless(
+      :@scopes, :$realm, :$section, :$privatePrefix, :$privateFile
+    );
 	}
 
 	method !handleLogin {
@@ -156,7 +99,7 @@ class WebService::EveOnline::SSO {
 		# 	$!client.cookies.push-cookie($c);
 		# 	$!postclient.cookies.push-cookie($c);
 		# }
-		$!client.cookie-jar.add-cookie($_) for $response.cookies;
+		self.client.cookie-jar.add-cookie($_) for $response.cookies;
 
 		# cw: Not optimal, but this should generally work for the servers
 		#     we connect to.
@@ -189,7 +132,7 @@ class WebService::EveOnline::SSO {
 		#say "U: $url";
 
 		{
-			$response = await $!client.get($url, :follow);
+			$response = await self.client.get($url, :follow);
 
 			CATCH {
 				# cw: Update for Cro
@@ -199,7 +142,8 @@ class WebService::EveOnline::SSO {
 			}
 		}
 
-		die "HTTP request to '$url' failed!" unless self!is-success($response);
+		die "HTTP request to '$url' failed!" 
+      unless self.is-success($response);
 
 		# @cookies = getCookies($response);
 		# for @cookies -> $c {
@@ -263,7 +207,7 @@ class WebService::EveOnline::SSO {
 		}
 
 		my $form_data;
-		$!characterID = $form_data<CharacterId> = $cid;
+		self.setCharacterID( $form_data<CharacterId> = $cid );
 		$form_data<action> = 'Authorize';
 		for @( $!xmldoc.elements(
 			:TAG<input>, :type<hidden>, :RECURSE(100)
@@ -273,7 +217,7 @@ class WebService::EveOnline::SSO {
 
 		my $response;
 		{
-			$response = await $!client.post(
+			$response = await self.client.post(
 				$formUrl,
 				content-type	=> 'application/x-www-form-urlencoded',
 				body          => $form_data
@@ -307,35 +251,6 @@ class WebService::EveOnline::SSO {
 		$response;
 	}
 
-	method !getBearerToken($form_data) {
-		# $!client.post(
-		#  	"{ PREFIX }/oauth/token",
-		#  	$form_data,
-	 	#  	:Authorization("Basic { self!encodeAuth }"),
-	  # );
-		await $!client.post(
-	  	"{ PREFIX }/oauth/token",
-			content-type	=> 'application/x-www-form-urlencoded',
-	  	body          => $form_data,
-			auth          => {
-				username => %!privateData{$!section}<client_id>,
-				password => %!privateData{$!section}<secret_id>
-			}
-	  );
-	}
-
-	method !setTokenData($newTokenData) {
-		$!tokenData = $newTokenData;
-		$!lastTokenDate = DateTime.now;
-		$!expires = $.lastTokenDate.later(:seconds($.tokenData<expires_in>));
-	}
-
-	method getHeader {
-		{
-			Authorization => "Bearer { $.tokenData<access_token> }"
-		};
-	}
-
 	method getToken {
 		my $state;
 
@@ -360,9 +275,10 @@ class WebService::EveOnline::SSO {
 
 		$response = await $!client.get($url, :follow);
 		# cw: Should throw an exception, instead.
-		die "HTTP request to '$url' failed!" unless self!is-success($response);
+		die "HTTP request to '$url' failed!" 
+      unless self.is-success($response);
 
-		$!client.headers.push(
+		self.client.headers.push(
 			|$response.headers.grep( *.name eq 'Request-Context' )
 		);
 
@@ -413,7 +329,7 @@ class WebService::EveOnline::SSO {
 
 		# cw: Should be an exception
 		die "Token not retrieved due to unexpected error."
-			unless self!is-success($response);
+			unless self.is-success($response);
 
 		# cw: Maybe add code to output response if a flag is set?
 		my $ct = $response.header('Content-Type');
@@ -423,26 +339,7 @@ class WebService::EveOnline::SSO {
 		my $json = await $response.body;
 		#$json.say;
 		#my $jsonObj = from-json($json);
-		self!setTokenData($json);
-	}
-
-	method refreshToken {
-		my $form_data = {
-			grant_type 		=> 'refresh_token',
-			refresh_token 	=> $.tokenData<refresh_token>
-		}
-		my $response = self!getBearerToken($form_data);
-
-		die "Token not refreshed due to unexpected error."
-			unless self!is-success($response);
-
-		# cw: Maybe add code to output response if a flag is set?
-		die "Invalid response content-type."
-			unless $response.field('Content-Type') ~~ /^ 'application/json' /;
-
-		#my $jsonObj = from-json(await $response.body);
-		my $jsonObj = await $response.body;
-		self!setTokenData($jsonObj);
+		self!.etTokenData($json);
 	}
 
 }
