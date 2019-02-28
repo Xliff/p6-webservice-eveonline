@@ -1,14 +1,15 @@
 use v6.c;
 
-use WebService::EveOnline::Base;
+use HTML::Parser::XML;
+use HTTP::Cookies;
+use XML;
 
-class WebService::EveOnline::SSO is WebService::EveONline::SSOBase {
-	use HTML::Parser::XML;
-#	use HTTP::UserAgent;
-	use HTTP::Cookies;
-	use XML;
+use WebService::EveOnline::Utils;
 
-	use WebService::EveOnline::Utils;
+use WebService::EveOnline::SSO::Base;
+
+class WebService::EveOnline::SSO::CLI {
+  also is WebService::EveOnline::SSO::Base
   
   # Entry point now looks like this: 
   #https://login.eveonline.com/oauth/authorize/?
@@ -339,7 +340,7 @@ class WebService::EveOnline::SSO is WebService::EveONline::SSOBase {
 		my $json = await $response.body;
 		#$json.say;
 		#my $jsonObj = from-json($json);
-		self!.etTokenData($json);
+		self!.setTokenData($json);
 	}
 
 }

@@ -10,7 +10,7 @@ our constant EVE_SSO_PREFIX is export = "https://login.eveonline.com";
 
 class WebService::EveOnline::SSOBase {
 	has @.scopes;
-	has %.privateData;
+	has %!privateData;
 	has $!client;
 
   has $!privateFile;
@@ -32,6 +32,8 @@ class WebService::EveOnline::SSOBase {
 	# Store the Character ID selected so that consumers can query for it,
 	# later.
 	has $.characterID;
+  
+  has $!wv;
   
   submethod BUILD {
     :@scopes,
@@ -58,12 +60,13 @@ class WebService::EveOnline::SSOBase {
   	self!getPrivateData;
   }
   
-	method characterID {
-		$!characterID;
-	}
+  # Protected
+  method privateData {
+    %!privateData;
+  }
   
   # Protected
-  method setCharacterID($charID) {
+  method setCharacterID ($charID) {
     $!characterID = $charID;
   }
   
@@ -127,10 +130,10 @@ class WebService::EveOnline::SSOBase {
 		};
 	}
   
-  method refreshToken {
+  method refreshToken($tokenCode) {
 		my $form_data = {
 			grant_type 		=> 'refresh_token',
-			refresh_token 	=> $.tokenData<refresh_token>
+			refresh_token 	=> $tokenCode
 		}
 		my $response = self.getBearerToken($form_data);
 
