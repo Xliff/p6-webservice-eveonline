@@ -1,10 +1,13 @@
 use v6.c;
 
 use GTK::Application;
+use WebkitGTK::Raw::Types;
 use WebkitGTK::WebView;
 
+use WebService::EveOnline::SSO::Base;
+
 class WebService::EveOnline::SSO::Web {
-  also is WebServive::EveOnline::SSO::Base;
+  also is WebService::EveOnline::SSO::Base;
 
   has $!wv;
   has $!init;
@@ -21,33 +24,37 @@ class WebService::EveOnline::SSO::Web {
     #  scope=<list of scopes delimited by %20>&
     #  state=< Rendom State Value >
     
-    my $prefix = "{ EVE_SSO_PREFIX}/oauth/authorize/?";
+    my $prefix = "{ EVE_SSO_PREFIX }/oauth/authorize/?";
     my $res = 'response_type=code';
     my $redir = 'redirect_uri=http://localhost:8888/';
-    my $cid = "client_id={ self.privateData{$!section} }";
-    my $s = @!scopes.join(' ');
+    my $cid = "client_id={ self.getSectionData<client_id> }";
+    my $s = "scopes={ self.scopes.join(' ') }";
     
     # Start GTK and begin the login process.
     my $a = $appGTK // GTK::Application.new( title => 'org.genex.weo' );
     
     $a.activate.tap({ 
       $!wv = WebkitGTK::WebView.new;
-      $a.window.destroy-signal({ $a.exit });
-      $a.window.add($wv);
+      $!wv.set_size_request(640, 480);
+      $a.window.destroy-signal.tap({ $a.exit });
+      $a.window.add($!wv);
+      $a.window.show_all;
       
       # Grab all URIs loaded by the WebView
       $!init = Promise.new;
-      $wv.load-changed.tap(-> *@a {  
+      $!wv.load-changed.tap(-> *@a {  
         given @a[1] {
           when WEBKIT_LOAD_STARTED {
-            $wv.get_uri ~~ / 'code=' (<-[ & ]>+) /;
+            say "loading { $!wv.get_uri }...";
+            $!wv.get_uri ~~ / 'code=' (<-[ & ]>+) /;
             with $/[0] {
-              $tokenCode = ~$/[0] 
-              $wv.close;
-              self.refreshToken($tokenCode);
+              say "retrieved code [ { ~$/[0] } ]";
+              $a.exit;
+              self.refreshToken(~$/[0]);
               $!init.keep;
             }
           }
+          
         }
       });
       
@@ -60,11 +67,11 @@ class WebService::EveOnline::SSO::Web {
   }
   
   method new (
-    @scopes,
-    $realm,
-    $section,
-    $privatePrefix,
-    $privateFile,
+    :@scopes,
+    :$realm,
+    :$section,
+    :$privatePrefix,
+    :$privateFile,
     :$appGTK
   ) {
     self.bless(

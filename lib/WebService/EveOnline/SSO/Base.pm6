@@ -7,19 +7,20 @@ use DateTime::Parse;
 use JSON::Fast;
 
 our constant EVE_SSO_PREFIX is export = "https://login.eveonline.com";
+our constant DEFAULT_HOME is export = "{ %*ENV<HOME> }/.ws_eve";
 
-class WebService::EveOnline::SSOBase {
-	has @.scopes;
+class WebService::EveOnline::SSO::Base {
 	has %!privateData;
 	has $!client;
-
   has $!privateFile;
-  has $.expires;
-  has $.lastTokenDate;
-  has $.tokenData;
   has $!privatePrefix;
   has $!realm;
   has $!section;
+
+  has @.scopes;
+  has $.expires;
+  has $.lastTokenDate;
+  has $.tokenData;
   
   # Entry point now looks like this: 
   #https://login.eveonline.com/oauth/authorize/?
@@ -35,7 +36,7 @@ class WebService::EveOnline::SSOBase {
   
   has $!wv;
   
-  submethod BUILD {
+  submethod BUILD (
     :@scopes,
     :$realm,
     :$section,
@@ -57,12 +58,25 @@ class WebService::EveOnline::SSOBase {
   	@!scopes = @scopes;
   	$!realm = $realm;
 
-  	self!getPrivateData;
+  	self!loadPrivateData;
+  }
+  
+  method !loadPrivateData {
+    # Override this to implement custom data retrieval method.
+    # cw: Consider using a callback to implement custom retrieval rather
+    #     than forced subclassing.
+    %!privateData = Config::INI::parse($!privateFile.IO.slurp)
+      if $!privateFile.IO.e
   }
   
   # Protected
   method privateData {
     %!privateData;
+  }
+
+  # Protected
+  method getSectionData {
+    %!privateData{$!section}
   }
   
   # Protected
@@ -75,22 +89,13 @@ class WebService::EveOnline::SSOBase {
 		200 >= $r.status < 300;
 	}
   
-  # Protected
-	method encodeAuth {
-		encode-base64(
-			#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
-			%!privateData{$!section}<client_id secret_id>.join(':'), '', :str
-		);
-	}
-
-  # Protected
-	method getPrivateData {
-		# Override this to implement custom data retrieval method.
-		# cw: Consider using a callback to implement custom retrieval rather
-		#     than forced subclassing.
-		%!privateData = Config::INI::parse($!privateFile.IO.slurp)
-				if $!privateFile.IO.e
-	}
+  # Protected - Deprecated
+	# method encodeAuth {
+	# 	encode-base64(
+	# 		#"{ %!privateData<client_id> }:{ %!privateData<secret_id> }", :str
+	# 		%!privateData{$!section}<client_id secret_id>.join(':'), '', :str
+	# 	);
+	# }
   
   # Protected
 	method getState {
@@ -106,7 +111,7 @@ class WebService::EveOnline::SSOBase {
 	 	#  	:Authorization("Basic { self!encodeAuth }"),
 	  # );
 		await $!client.post(
-	  	"{ PREFIX }/oauth/token",
+	  	"{ EVE_SSO_PREFIX }/oauth/token",
 			content-type	=> 'application/x-www-form-urlencoded',
 	  	body          => $form_data,
 			auth          => {
@@ -132,8 +137,10 @@ class WebService::EveOnline::SSOBase {
   
   method refreshToken($tokenCode) {
 		my $form_data = {
-			grant_type 		=> 'refresh_token',
-			refresh_token 	=> $tokenCode
+			#grant_type 		=> 'refresh_token',    # From 2018 or so...
+      #refresh_token 	=> $tokenCode          # From 2018 or so...
+      grant_type      => 'authorization_code',
+      code            => $tokenCode
 		}
 		my $response = self.getBearerToken($form_data);
 

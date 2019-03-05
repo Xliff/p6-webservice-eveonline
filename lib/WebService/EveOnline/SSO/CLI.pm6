@@ -9,7 +9,7 @@ use WebService::EveOnline::Utils;
 use WebService::EveOnline::SSO::Base;
 
 class WebService::EveOnline::SSO::CLI {
-  also is WebService::EveOnline::SSO::Base
+  also is WebService::EveOnline::SSO::Base;
   
   # Entry point now looks like this: 
   #https://login.eveonline.com/oauth/authorize/?
@@ -32,7 +32,7 @@ class WebService::EveOnline::SSO::CLI {
 		:@scopes,
 		:$realm,
 		:$section,
-		:$privatePrefix,
+		:$privateEVE_SSO_PREFIX,
 		:$privateFile
 	) {
 
@@ -46,26 +46,28 @@ class WebService::EveOnline::SSO::CLI {
     :@scopes, 
     :$realm, 
     :$section, 
-    :$privatePrefix, 
+    :$privateEVE_SSO_PREFIX, 
     :$privateFile
   ) {
 		self.bless(
-      :@scopes, :$realm, :$section, :$privatePrefix, :$privateFile
+      :@scopes, :$realm, :$section, :$privateEVE_SSO_PREFIX, :$privateFile
     );
 	}
 
 	method !handleLogin {
 		my @forms = $!xmldoc.elements(:TAG<form>, :RECURSE(100));
 		my $form_data = {
-		 	ClientIdentifier 	=> %.privateData{$!section}<client_id>,
-		 	UserName 			    => %.privateData<_><username>,
-		 	Password			    => %.privateData<_><password>,
+		 	ClientIdentifier 	=> self.getSectionData<client_id>,
+		 	UserName 			    => self.privateData<_><username>,
+		 	Password			    => self.privateData<_><password>,
 		 	RememberMe		    => 'false',
 			#realm				      => %.privateData<_><realm>
 		};
 		#$form_data<realm> //= $!realm if $!realm.defined && $!realm.chars;
 
-		for $!xmldoc.elements(:TAG<input>, :type<hidden>, :RECURSE(100)).List -> $hf {
+		for $!xmldoc.elements(
+      :TAG<input>, :type<hidden>, :RECURSE(100)
+    ).List -> $hf {
 			$form_data{$hf<name>} = $hf<value>;
 		}
 
@@ -75,12 +77,12 @@ class WebService::EveOnline::SSO::CLI {
 
 		unless $formUrl ~~ /^ 'http' s? '://' / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
-			$formUrl = "{ PREFIX }{ $formUrl }";
+			$formUrl = "{ EVE_SSO_PREFIX }{ $formUrl }";
 		}
 
 		my $response;
 		{
-			$response = await $!client.post(
+			$response = await self.client.post(
 				$formUrl,
 				content-type	=> 'application/x-www-form-urlencoded',
 				body					=> $form_data
@@ -124,7 +126,7 @@ class WebService::EveOnline::SSO::CLI {
 		unless $url ~~ /^^ 'https://' / {
 			# cw: MUST be HTTPS at this point.
 		  $url = '/' ~ $url unless $url.substr(0, 1) eq '/';
-			$url = "{ PREFIX }{ $url }"
+			$url = "{ EVE_SSO_PREFIX }{ $url }"
 		}
 
 		# cw: -YYY-
@@ -166,7 +168,7 @@ class WebService::EveOnline::SSO::CLI {
 		my $input = '';
 		my ($cid, $cName);
 		my %toons = do for @options {
-			if (%!privateData<_><CHARACTER> // '') eq $_[0].text {
+			if (self.privateData<_><CHARACTER> // '') eq $_[0].text {
 				$cid = $input = $_<value>;
 				$cName = $_[0].text;
 			}
@@ -204,7 +206,7 @@ class WebService::EveOnline::SSO::CLI {
 		my $formUrl = @forms[0]<action>;
 		unless $formUrl ~~ /^ 'http' s? '://' / {
 			# cw: Will more than likely work for EVE, but NOT a real solution.
-			$formUrl = "{ PREFIX }{ $formUrl }";
+			$formUrl = "{ EVE_SSO_PREFIX }{ $formUrl }";
 		}
 
 		my $form_data;
@@ -258,23 +260,23 @@ class WebService::EveOnline::SSO::CLI {
 		# cw: Should throw an exception, instead.
 		die "Missing required private parameters"
 			unless
-				%.privateData{$!section}<client_id>.defined &&
-				%.privateData{$!section}<secret_id>.defined &&
-				%.privateData<_><username>.defined  &&
-				%.privateData<_><password>.defined;
+				self.getSectionData<client_id>.defined &&
+				self.getSectionData<secret_id>.defined &&
+				self.privateData<_><username>.defined  &&
+				self.privateData<_><password>.defined;
 
-		my $redir = %!privateData<redirect_uri> // "http://localhost:8888/";
+		my $redir = self.privateData<redirect_uri> // "http://localhost:8888/";
 		my $p = prepParams([
-			[ 'response_type', 	'code' 					                     ],
-			[ 'redirect_uri', 	$redir 					                     ],
-			[ 'client_id', 		  %!privateData{$!section}<client_id>  ],
-			[ 'scope', 			    @.scopes.join(' ')  	               ],
-			[ 'state',  		    ($state = self!getState)             ]
+			[ 'response_type', 	'code' 					                           ],
+			[ 'redirect_uri', 	$redir 					                           ],
+			[ 'client_id', 		  self.privateData{self.section}<client_id>  ],
+			[ 'scope', 			    @.scopes.join(' ')  	                     ],
+			[ 'state',  		    ($state = self.getState)                   ]
 		]);
-		my $url = "{ PREFIX }/oauth/authorize?{ $p }";
+		my $url = "{ EVE_SSO_PREFIX }/oauth/authorize?{ $p }";
 		my $response;
 
-		$response = await $!client.get($url, :follow);
+		$response = await self.client.get($url, :follow);
 		# cw: Should throw an exception, instead.
 		die "HTTP request to '$url' failed!" 
       unless self.is-success($response);
@@ -326,7 +328,7 @@ class WebService::EveOnline::SSO::CLI {
 			grant_type	=> 'authorization_code',
 			code 				=> $tokenCode,
 		};
-		$response = self!getBearerToken($form_data);
+		$response = self.getBearerToken($form_data);
 
 		# cw: Should be an exception
 		die "Token not retrieved due to unexpected error."
@@ -340,7 +342,7 @@ class WebService::EveOnline::SSO::CLI {
 		my $json = await $response.body;
 		#$json.say;
 		#my $jsonObj = from-json($json);
-		self!.setTokenData($json);
+		self.setTokenData($json);
 	}
 
 }

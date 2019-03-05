@@ -4,7 +4,7 @@ use v6.c;
 
 use DBIish;
 
-use WebService::EveOnline::SSO;
+use WebService::EveOnline::SSO::Web;
 use WebService::EveOnline::Utils;
 use WebService::EveOnline::Data;
 use WebService::EveOnline::Data::Misc;
@@ -294,7 +294,7 @@ sub MAIN(
 		|@aliases
 	);
 
-	$sso = WebService::EveOnline::SSO.new(
+	$sso = WebService::EveOnline::SSO::Web.new(
 		:scopes(<
 			esi-assets.read_assets.v1
 			esi-assets.read_corporation_assets.v1
@@ -314,9 +314,9 @@ sub MAIN(
 		where => 'char',
 		what  => [ 'asset' ]
 	};
-	$search<where> = 'corp' if $corp.defined && $corp;
-	$search<where> = 'char' if $char.defined && $char;
-	$search<where> = 'all'  if [&&]($corp.defined, $char.defined, $corp, $char);
+	$search<where> = 'corp' with $corp;
+	$search<where> = 'char' with $char;
+	$search<where> = 'all'  with $corp && $char;
 
 	# cw: Would blueprints without a filter be a useful option?
 	#     (Probably for newbies, but....)
