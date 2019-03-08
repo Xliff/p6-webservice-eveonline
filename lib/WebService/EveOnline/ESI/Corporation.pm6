@@ -18,7 +18,10 @@ class WebService::EveOnline::ESI::Corporation {
     self.appendPrefix("/{ self.type }/corporations/");
   }
 
-  method new(:$sso) {
+  multi method new(:$sso) {
+    self.bless(:$sso);
+  }
+  multi method new($sso) {
     self.bless(:$sso);
   }
 
