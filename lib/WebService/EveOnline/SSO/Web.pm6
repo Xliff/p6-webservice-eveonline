@@ -28,7 +28,7 @@ class WebService::EveOnline::SSO::Web {
     my $res = 'response_type=code';
     my $redir = 'redirect_uri=http://localhost:8888/';
     my $cid = "client_id={ self.getSectionData<client_id> }";
-    my $s = "scopes={ self.scopes.join(' ') }";
+    my $s = "scope={ self.scopes.join(' ') }";
     
     # Start GTK and begin the login process.
     my $a = $appGTK // GTK::Application.new( title => 'org.genex.weo' );
@@ -45,13 +45,14 @@ class WebService::EveOnline::SSO::Web {
       $!wv.load-changed.tap(-> *@a {  
         given @a[1] {
           when WEBKIT_LOAD_STARTED {
-            say "loading { $!wv.get_uri }...";
+            print "loading { $!wv.get_uri }...\n";
             $!wv.get_uri ~~ / 'code=' (<-[ & ]>+) /;
             with $/[0] {
-              say "retrieved code [ { ~$/[0] } ]";
-              $a.exit;
+              #say "retrieved code [ { ~$/[0] } ]";
+              $a.window.hide;
               self.refreshToken(~$/[0]);
               $!init.keep;
+              $a.exit;
             }
           }
           

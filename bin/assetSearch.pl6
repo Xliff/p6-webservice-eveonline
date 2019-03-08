@@ -294,21 +294,25 @@ sub MAIN(
 		|@aliases
 	);
 
+  my @scopes = ('esi-assets.read_assets.v1');
 	$sso = WebService::EveOnline::SSO::Web.new(
-		:scopes(<
-			esi-assets.read_assets.v1
-			esi-assets.read_corporation_assets.v1
-			esi-corporations.read_blueprints.v1
-			esi-characters.read_blueprints.v1
-			esi-universe.read_structures.v1
-		>),
+		# :scopes(<
+		# 	esi-assets.read_assets.v1
+		# 	esi-assets.read_corporation_assets.v1
+		# 	esi-corporations.read_blueprints.v1
+		# 	esi-characters.read_blueprints.v1
+		# 	esi-universe.read_structures.v1
+    #   esi-corporations.read_structures.v1
+		# >),
+    :@scopes,
 		:realm<ESI>,
-		:section<assetSearch>
+		:section<assetCrawler>
 	);
+  $sso.await-init;
 
 	# Add in :type, later.
-	$universe = WebService::EveOnline::ESI::Universe.new( :sso($sso) );
-	$asset-api = WebService::EveOnline::ESI::Assets.new( :sso($sso) );
+	$universe = WebService::EveOnline::ESI::Universe.new(:$sso);
+	$asset-api = WebService::EveOnline::ESI::Assets.new(:$sso);
 
 	my $search = {
 		where => 'char',

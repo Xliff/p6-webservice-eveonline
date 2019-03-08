@@ -11,9 +11,7 @@ class WebService::EveOnline::ESI::Base {
 
   has $!type;
 
-  submethod BUILD(:$type = 'latest') {
-    $!type = $type;
-  }
+  submethod BUILD(:$!type = 'latest') { }
 
   method new($sso, :$type, :$useragent) {
     die "Invalid server parameter. Must be one of 'legacy', 'latest', or 'dev'"
@@ -44,6 +42,7 @@ class WebService::EveOnline::ESI::Base {
 			#     can come back and revisit, later.
 			die "Invalid datasource!"
 				unless $datasource eq <latest legacy dev>.any;
+        
     	$url ~= "?datasource={$datasource}";
 			$nf = 1;
 		}

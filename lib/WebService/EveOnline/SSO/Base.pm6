@@ -7,6 +7,7 @@ use DateTime::Parse;
 use JSON::Fast;
 
 our constant EVE_SSO_PREFIX is export = "https://login.eveonline.com";
+our constant EVE_VERIFY_PREFIX is export = "https://esi.evetech.net";
 our constant DEFAULT_HOME is export = "{ %*ENV<HOME> }/.ws_eve";
 
 class WebService::EveOnline::SSO::Base {
@@ -158,6 +159,19 @@ class WebService::EveOnline::SSO::Base {
 		#my $jsonObj = from-json(await $response.body);
 		my $jsonObj = await $response.body;
 		self.setTokenData($jsonObj);
+    
+    # Get character ID through verification -- # No datasource should be
+    # specified, so this will be tricky. Should be done as a full request, 
+    # but the mechanism for that may need to be created.
+    my $v = await $!client.get(
+      "{ EVE_VERIFY_PREFIX }/verify/",
+      headers => self.getHeader.pairs
+    );
+    my $vb = await $v.body;
+    
+    die 'Could not verify character information' 
+      unless $vb ~~ Hash && ($vb<CharacterID>:exists);
+    $!characterID = $vb<CharacterID>;
 	}
 
 }
