@@ -4,6 +4,7 @@ use WebService::EveOnline::ESI::Base;
 use WebService::EveOnline::ESI::Character;
 use WebService::EveOnline::ESI::Corporation;
 
+use WebService::EveOnline::SSO::Base;
 
 class WebService::EveOnline::ESI::Assets {
 	also is WebService::EveOnline::ESI::Base;
@@ -18,7 +19,7 @@ class WebService::EveOnline::ESI::Assets {
 
 	method new(:$sso) {
 		die "A valid SSO object passed as a parameter to new() is required."
-			unless $sso ~~ ::('WebService::EveOnline::SSO');
+			unless $sso ~~ WebService::EveOnline::SSO::Base;
 		self.bless(:$sso);
 	}
 

@@ -110,11 +110,15 @@ class WebService::EveOnline::SSO::Base {
 		#  	$form_data,
 	 	#  	:Authorization("Basic { self!encodeAuth }"),
 	  # );
+    my $body = to-json($form_data, :!pretty);
 		await $!client.post(
 	  	"{ EVE_SSO_PREFIX }/oauth/token",
-			content-type	=> 'application/x-www-form-urlencoded',
-	  	body          => $form_data,
-			auth          => {
+      headers        => [ 
+        Content-Type	 => 'application/json', 
+        Content-Length => $body.chars 
+      ],
+	  	body           => $body,
+			auth           => {
 				username => %!privateData{$!section}<client_id>,
 				password => %!privateData{$!section}<secret_id>
 			}
@@ -149,7 +153,7 @@ class WebService::EveOnline::SSO::Base {
 
 		# cw: Maybe add code to output response if a flag is set?
 		die "Invalid response content-type."
-			unless $response.field('Content-Type') ~~ /^ 'application/json' /;
+			unless $response.header('Content-Type') ~~ /^ 'application/json' /;
 
 		#my $jsonObj = from-json(await $response.body);
 		my $jsonObj = await $response.body;

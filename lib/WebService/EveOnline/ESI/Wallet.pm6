@@ -17,7 +17,7 @@ class WebService::EveOnline::ESI::Wallet {
 
   method new($sso) {
     die "A valid SSO object must be used to complete this instantiation."
-      unless $sso ~~ WebService::EveOnline::SSO;
+      unless $sso ~~ WebService::EveOnline::SSO::Base;
 
     self.bless(:$sso);
   }
