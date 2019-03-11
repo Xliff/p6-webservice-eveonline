@@ -22,23 +22,13 @@ class WebService::EveOnline::SSO::CLI {
 	# cw: Please note that there are places where I use backslash to quote
 	#     characters in regexes. This is solely due to not screw up the
 	#     syntactical highlighting in the editor I use for development.
-
 	
 	#has $!postclient;
 	has $!xmldoc;
   has %!fieldsInForm;
 
-	submethod BUILD(
-		:@scopes,
-		:$realm,
-		:$section,
-		:$privateEVE_SSO_PREFIX,
-		:$privateFile
-	) {
-
-	}
-
 	submethod TWEAK {
+    return with self.privateData<_><token>;
 		self.getToken;
 	}
 

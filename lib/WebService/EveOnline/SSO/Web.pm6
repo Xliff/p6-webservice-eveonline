@@ -15,24 +15,46 @@ class WebService::EveOnline::SSO::Web {
   # This will work, but may be a bit confusing to end-users. We take SOLE
   # control of GTK, here (and anything that uses it). This may be off-putting
   # for end-users who may wish to use GTK further.
-  submethod BUILD (:$appGTK is copy) {
+  submethod BUILD (:$appGTK is copy) {    
+    return with self.privateData<_><token>;
+    
+    self.getToken($appGTK);
+  }
+  
+  method new (
+    :@scopes,
+    :$realm,
+    :$section,
+    :$privatePrefix,
+    :$privateFile,
+    :$appGTK
+  ) {
+    self.bless(
+      :@scopes, 
+      :$realm, 
+      :$section, 
+      :$privatePrefix, 
+      :$privateFile,
+      :$appGTK
+    );
+  }
+  
+  method getToken($appGTK?) {
     # Entry point now looks like this: 
-    #https://login.eveonline.com/oauth/authorize/?
+    # https://login.eveonline.com/oauth/authorize/?
     #  response_type=code&
     #  redirect_uri=< Encoded redirect URL >&
     #  client_id=< 3rdpartyClientId >&
     #  scope=<list of scopes delimited by %20>&
     #  state=< Rendom State Value >
-    
+        
     my $prefix = "{ EVE_SSO_PREFIX }/oauth/authorize/?";
     my $res = 'response_type=code';
     my $redir = 'redirect_uri=http://localhost:8888/';
     my $cid = "client_id={ self.getSectionData<client_id> }";
     my $s = "scope={ self.scopes.join(' ') }";
     
-    # Start GTK and begin the login process.
     my $a = $appGTK // GTK::Application.new( title => 'org.genex.weo' );
-    
     $a.activate.tap({ 
       $!wv = WebkitGTK::WebView.new;
       $!wv.set_size_request(640, 480);
@@ -67,24 +89,6 @@ class WebService::EveOnline::SSO::Web {
     $a.run without $appGTK;
   }
   
-  method new (
-    :@scopes,
-    :$realm,
-    :$section,
-    :$privatePrefix,
-    :$privateFile,
-    :$appGTK
-  ) {
-    self.bless(
-      :@scopes, 
-      :$realm, 
-      :$section, 
-      :$privatePrefix, 
-      :$privateFile,
-      :$appGTK
-    );
-  }
-  
   # method getRealToken($tokenCode) {
   #   my $form_data = {
 	# 		grant_type	=> 'authorization_code',
@@ -106,6 +110,7 @@ class WebService::EveOnline::SSO::Web {
   # }
   
   method await-init {
+    return unless $!init && $!init ~~ Promise;
     await $!init;
   } 
       

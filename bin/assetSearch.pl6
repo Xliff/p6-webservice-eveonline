@@ -11,7 +11,7 @@ use WebService::EveOnline::Data::Misc;
 use WebService::EveOnline::ESI::Assets;
 use WebService::EveOnline::ESI::Universe;
 
-my (%inv, %manifest, %assets, $asset-api, $universe, $sso);
+my (%inv, %manifest, %assets, $asset-api, $universe, $sso, $search);
 
 my @valid-filters = <
 	is_singleton
@@ -90,6 +90,10 @@ sub checkLocation($t, @list, $i) {
 		use WebService::EveOnline::ESI::Alliance;
 		use WebService::EveOnline::ESI::Corporation;
 
+    # If only using character search, then exclude all non-public station
+    # results.
+    return unless $search<where> eq <all corp>.any;
+    
 		# Get private corporation structures.
 		my $corp = WebService::EveOnline::ESI::Corporation.new($sso);
 		%privateStructures = arrayToHash(
@@ -130,6 +134,8 @@ sub checkLocation($t, @list, $i) {
 		}
 
 		given $unr<location_id> {
+      say "Resolving: $_";
+      
 			# In known space
 			when is-a-system($_) {
 				$i<system_id> = $_;
@@ -174,6 +180,8 @@ sub filterLocations(%items, %filters) {
 
 	my %usedItems := %items<filtered>:exists ?? %items<filtered> !! %items;
 	for %usedItems.pairs -> $p {
+    say "P: { $p.gist }";
+    
 	  my $item = resolveLocation($p.value);
 	  # Retrieve location data. (mandatory)
 	  # for <char corp> -> $c {
@@ -241,14 +249,16 @@ sub findItems(%filters, $searches) {
 				my $a;
 				if $searches<where>.any eq <all char>.any {
 					$a = $asset-api.getCharacterAssets( :filter($grepSub) );
-					%found-items<char><data>.append($a<data>);
-					%found-items<char><filtered>.append($a<filtered>) if $a<filtered>:exists;
+					%found-items<char><data>.append: $a<data>.Hash;
+					%found-items<char><filtered>.append($a<filtered>.Hash) 
+            if $a<filtered>:exists;
 				}
 
 				if $searches<where>.any eq <all corp>.any {
 					$a = $asset-api.getCorporationAssets( :filter($grepSub) );
-					%found-items<corp><data>.append: $a<data>;
-					%found-items<corp><filtered>.append($a<filtered>) if $a<filtered>:exists;
+					%found-items<corp><data>.append: $a<data>.Hash;
+					%found-items<corp><filtered>.append($a<filtered>.Hash) 
+            if $a<filtered>:exists;
 				}
 			}
 
@@ -256,14 +266,16 @@ sub findItems(%filters, $searches) {
 				my $a;
 				if $searches<where>.any eq <all char>.any {
 					$a = $asset-api.getCharacterBlueprints( :filter($grepSub) );
-					%found-items<char><data>.append($a<data>);
-					%found-items<char><filtered>.append($a<filtered>) if $a<filtered>:exists;
+					%found-items<char><data>.append: $a<data>;
+					%found-items<char><filtered>.append($a<filtered>.Hash) 
+            if $a<filtered>:exists;
 				}
 
 				if $searches<where>.any eq <all corp>.any {
 					$a = $asset-api.getCorporationBlueprints( :filter($grepSub) );
-				  %found-items<corp><data>.append($a<data>);
-				  %found-items<corp><filtered>.append($a<filtered>) if $a<filtered>:exists;
+				  %found-items<corp><data>.append($a<data>.Hash);
+				  %found-items<corp><filtered>.append($a<filtered>.Hash) 
+            if $a<filtered>:exists;
 			  }
 		  }
 		}
@@ -314,7 +326,7 @@ sub MAIN(
 	$universe = WebService::EveOnline::ESI::Universe.new(:$sso);
 	$asset-api = WebService::EveOnline::ESI::Assets.new(:$sso);
 
-	my $search = {
+	$search = {
 		where => 'char',
 		what  => [ 'asset' ]
 	};
@@ -400,14 +412,14 @@ sub MAIN(
 		if %extras<quantity>.defined {
 			my $ql = $checkQl('--quantity', %extras<quantity>);
 			%filters.push: {
-				quantity => { compareQuantity($_<quantity>, $ql) }
+				quantity => -> $i { compareQuantity($i<quantity>, $ql) }
 			};
 		}
 
 		if %extras<runs>.defined {
 			my $ql = $checkQl('--runs', %extras<runs>);
 			%filters.push: {
-				runs => { compareQuantity($_<runs> , $ql); }
+				runs => -> $i { compareQuantity($i<runs> , $ql); }
 			};
 		}
 
@@ -416,7 +428,7 @@ sub MAIN(
 			die "Time efficiency must be an integer between 0 and 10.\n"
 				unless $ql[1] <= 10;
 			%filters.push: {
-				time_efficiency => { compareQuantity($_<te> , $ql); }
+				time_efficiency => -> $i { compareQuantity($i<te> , $ql); }
 			};
 		}
 
@@ -424,8 +436,8 @@ sub MAIN(
 			my $ql = $checkQl('--time_efficiency', %extras<time_efficiency>);
 			die "Time efficiency must be an integer between 0 and 10.\n"
 				unless $ql[1] <= 10;
-			%filters.push: {
-				time_efficiency => { compareQuantity($_<time_efficiency> , $ql); }
+			%filters.push: -> $i {
+				time_efficiency => { compareQuantity($i<time_efficiency> , $ql); }
 			};
 		}
 
@@ -434,7 +446,7 @@ sub MAIN(
 			die "Material efficiency must be an integer between 0 and 10.\n"
 				unless $ql[1] <= 10;
 			%filters.push: {
-				material_efficiency => { compareQuantity($_<me> , $ql); }
+				material_efficiency => -> $i { compareQuantity($i<me> , $ql); }
 			};
 		}
 
@@ -443,7 +455,9 @@ sub MAIN(
 			die "Material efficiency must be an integer between 0 and 10.\n"
 				unless $ql[1] <= 10;
 			%filters.push: {
-				material_efficiency => { compareQuantity($_<material_efficiency> , $ql); }
+				material_efficiency => -> $i { 
+          compareQuantity($i<material_efficiency> , $ql); 
+        }
 			};
 		}
 	}
@@ -471,15 +485,15 @@ sub MAIN(
 	}
 
 	%filters.push: {
-		type_id => { $_<type_id> == @type_ids.any }
+		type_id => -> $i { $i<type_id> == @type_ids.any }
 	} if +@type_ids;
 
 	%filters.push: {
-		location_type => { $_<location_type> eq @location_types.any }
+		location_type => -> $i { $i<location_type> eq @location_types.any }
 	} if +@location_types;
 
 	%filters.push: {
-		location_flag => { $_<location_flag> eq @location_flags.any }
+		location_flag => -> $i { $_<location_flag> eq @location_flags.any }
 	} if +@location_flags;
 
 	if %extras<is-original>.defined || %extras<is-copy>.defined {
@@ -497,11 +511,11 @@ sub MAIN(
 				%extras<is-copy>.Str.lc eq <1 0 true false>;
 
 		%filters.push: {
-			is-original => {
+			is-original => -> $i {
 			  (%extras<is-original> // !%extras<is-copy>) ??
-					($_<quantity> == -1)
+					($i<quantity> == -1)
 					!!
-					($_<quantity> == -2)
+					($i<quantity> == -2)
 			}
 		};
 	}
@@ -533,10 +547,10 @@ DIE
 	%filters.gist.say;
 	%location-filters.gist.say;
 
-	resolveLocation(
-		findItems(%filters, $search),
-		%location-filters
-	);
+  my %f = findItems(%filters, $search);
+  say "----> F:  { %f.gist }";
+  
+	resolveLocation(%f, %location-filters);
 	
 }
 

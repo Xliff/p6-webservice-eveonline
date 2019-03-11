@@ -1,5 +1,7 @@
 use v6.c;
 
+use Method::Also;
+
 use WebService::EveOnline::Utils;
 use WebService::EveOnline::ESI::Base;
 
@@ -10,7 +12,7 @@ class WebService::EveOnline::ESI::Corporation {
 
   submethod BUILD {
     use WebService::EveOnline::ESI::Character;
-    my $c = WebService::EveOnline::ESI::Character.new(:sso(self.sso));
+    my $c = WebService::EveOnline::ESI::Character.new(sso => self.sso);
     $!corporationID = $c.corporation-id;
   }
 
@@ -33,13 +35,13 @@ class WebService::EveOnline::ESI::Corporation {
     $cid;
   }
 
-  method corporation-id {
+  method corporation-id is also<corporation_id> {
     $!corporationID
   }
 
   method getInformation($corpId?, :$datasource) {
     my $cid = self!getCorpId($corpId);
-    self.requestByPrefix($cid, :$datasource);
+    self.requestByPrefix("{ $cid }/", :$datasource);
   }
 
   method getAllianceHistory($corpId?, :$datasource) {
@@ -252,19 +254,22 @@ DIE
     self.requestByPrefix("{ $!corporationID }/standings/", :$datasource);
   }
 
-  method getStarbases(:$datasource) {
+  method getStarbases($corpId?, :$datasource) {
+    my $cid = self!getCorpId($corpId);
     self.checkScope('esi-corporations.read_starbases.v1');
-    self.requestByPrefix("{ $!corporationID }/starbases/", :$datasource);
+    self.requestByPrefix("{ $cid }/starbases/", :$datasource);
   }
 
-  method getStarbase($starbase_id, :$datasource) {
+  method getStarbase($starbase_id, $corpId?, :$datasource) {
+    my $cid = self!getCorpId($corpId);
     self.checkScope('esi-corporations.read_starbases.v1');
-    self.requestByPrefix("{ $!corporationID }/starbases/{ $starbase_id }/", :$datasource);
+    self.requestByPrefix("{ $cid }/starbases/{ $starbase_id }/", :$datasource);
   }
 
-  method getStructures(:$datasource) {
+  method getStructures($corpId?, :$datasource) {
+    my $cid = self!getCorpId($corpId);
     self.checkScope('esi-corporations.read_structures.v1');
-    self.requestByPrefix("{ $!corporationID }/structures/", :$datasource);
+    self.requestByPrefix("{ $cid }/structures/", :$datasource);
   }
 
   method getTitles(:$datasource) {

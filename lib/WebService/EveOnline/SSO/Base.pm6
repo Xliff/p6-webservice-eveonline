@@ -60,14 +60,100 @@ class WebService::EveOnline::SSO::Base {
   	$!realm = $realm;
 
   	self!loadPrivateData;
+    self.checkExpiry;
   }
   
   method !loadPrivateData {
     # Override this to implement custom data retrieval method.
     # cw: Consider using a callback to implement custom retrieval rather
     #     than forced subclassing.
-    %!privateData = Config::INI::parse($!privateFile.IO.slurp)
-      if $!privateFile.IO.e
+    my %pd = Config::INI::parse($!privateFile.IO.slurp)
+      if $!privateFile.IO.e;
+   %!privateData<_> = %pd<_>;
+   %!privateData{$!section} = %pd{$!section};
+   say "PD: { %pd.gist } / { %pd<_><expires>.^name }";
+  }
+  
+  # Must be defined in subclasses
+  method getToken { ... }
+  
+  method checkExpiry {
+    my $clearData = False;
+    my $lock = Lock.new;
+    
+    with %!privateData<_><expires> 
+      andthen %!privateData<_><token> 
+      andthen %!privateData<_><CharacterID> 
+    {
+      # With restart data. Check for expired access_token
+      if %!privateData<_><expires> <= DateTime.now.posix {
+        say 'Expired';
+        my $rte = %!privateData<_><expires> + 15 * 60; # 15 minutes later
+        
+        # Check for expired refresh token
+        if $rte <= DateTime.now.posix {
+          # Within time for refresh_token, 
+          say 'Expired refresh';
+          my ($retries, $valid) = (5, False);
+          
+          while $retries {
+            try {
+              CATCH { 
+                default {
+                  given .message {
+                    when /'502' | '503' | '504'/ {
+                      say 'Server error. Retrying...';
+                      $retries--;
+                    }
+                    next;
+                  }
+                  default {
+                    .message.say; 
+                    say 'Refresh expired.';
+                    last;
+                  }
+                }
+              }
+              # Attempt to retrieve new access_token, otherwise clear 
+              # retrieved data.
+              $lock.protect({
+                self.refreshToken($_, :refresh) 
+                  with %!privateData<_><refresh_token>;
+              });
+              $valid = True;
+              last;
+            }
+          }
+          $clearData = True unless $valid;
+        } else {
+          $clearData = True;
+        }
+      } else {
+        # Token is not expired. Set tokenData if it has not already
+        # been done.
+        $lock.protect({
+          without $!tokenData {
+            say 'Resetting...';
+            $!tokenData = {
+              access_token  => %!privateData<_><token>,
+              refresh_token => %!privateData<_><trefresh_token>,
+              expires_in    => %!privateData<_><expires> - DateTime.now.posix
+            };
+            $!characterID = %!privateData<_><CharacterID>;
+            $!lastTokenDate = DateTime.now;
+            $!expires = %!privateData<_><expires>;
+          }
+        });
+      }
+    } else {
+      # Without restart data. Clear all keys, just to be sure.
+      say 'Clearing...';
+      $clearData = True;
+    }
+    say "SSO: { self.gist } / { self.WHERE }";
+    $lock.protect({
+      %!privateData<_><token refresh_token expires CharacterID>:delete 
+    }) if $clearData;
   }
   
   # Protected
@@ -130,7 +216,9 @@ class WebService::EveOnline::SSO::Base {
 	method setTokenData($newTokenData) {
 		$!tokenData = $newTokenData;
 		$!lastTokenDate = DateTime.now;
-		$!expires = $.lastTokenDate.later(:seconds($.tokenData<expires_in>));
+		$!expires = $.lastTokenDate.later(
+      seconds => $.tokenData<expires_in>
+    ).posix;
 	}
 
   # Protected
@@ -140,13 +228,19 @@ class WebService::EveOnline::SSO::Base {
 		};
 	}
   
-  method refreshToken($tokenCode) {
-		my $form_data = {
-			#grant_type 		=> 'refresh_token',    # From 2018 or so...
-      #refresh_token 	=> $tokenCode          # From 2018 or so...
-      grant_type      => 'authorization_code',
-      code            => $tokenCode
-		}
+  method refreshToken($tokenCode, :$refresh = False) {
+		my $form_data = $refresh.not ?? 
+      {
+  			#grant_type 		=> 'refresh_token',    # From 2018 or so...
+        #refresh_token 	=> $tokenCode          # From 2018 or so...
+        grant_type      => 'authorization_code',
+        code            => $tokenCode
+  		} !!
+      { 
+        grant_type      => 'refresh_token',
+        refresh_token   => $tokenCode
+      };
+      
 		my $response = self.getBearerToken($form_data);
 
 		die "Token not refreshed due to unexpected error."
@@ -172,6 +266,26 @@ class WebService::EveOnline::SSO::Base {
     die 'Could not verify character information' 
       unless $vb ~~ Hash && ($vb<CharacterID>:exists);
     $!characterID = $vb<CharacterID>;
+    
+    # Use Config::INI to parse and then output privateData file with new
+    # token data. Token data is output to the global section using two keys:
+    #        token: Currently active token
+    #   expiration: Date of expiration.
+    # Read write happens in one operation. The entirety of the privateData file 
+    # is NOT to be kept in memory!!
+    return unless $!privateFile.IO.e;
+    my $pd = Config::INI::parse($!privateFile.IO.slurp);
+    
+    $pd<CharacterID>   = $!characterID;
+    $pd<token>         = $.tokenData<access_token>;
+    $pd<refresh_token> = $.tokenData<refresh_token>;
+    $pd<expires>       = DateTime
+      .now
+      .later( seconds => $.tokenData<expires_in> )
+      .posix;
+      
+    use Config::INI::Writer;
+    Config::INI::Writer::dumpfile($pd, $!privateFile);
 	}
 
 }

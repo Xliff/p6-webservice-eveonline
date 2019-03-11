@@ -13,11 +13,17 @@ class WebService::EveOnline::ESI::Alliance {
 
 		use WebService::EveOnline::ESI::Corporation;
 
-		my $corp = WebService::EveOnline::ESI::Corporation.new( :sso(self.sso) );
-		my $i = $corp.getInformation( :datasource(self.type) );
+		my $corp = WebService::EveOnline::ESI::Corporation.new( 
+      sso => self.sso 
+    );
+		my $i = $corp.getInformation();
 		$!corp-id = $i<corporation_id>;
     $!alliance_id = $i<alliance_id>;
 	}
+  
+  method new (:$sso) {
+    self.bless(:$sso);
+  }
 
 	method character-id {
 		self.sso.characterID;

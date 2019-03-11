@@ -197,10 +197,11 @@ DIE
 
 		my $ret = self.requestByPrefix($url, :$filter, :$datasource, :paged);
 
-		$ret.gist.say;
-
-		$ret<data>     = arrayToHash($ret<data>, 'item_id');
-		$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') if $ret<filtered>:exists;
+    # Never got around to actually filtering the data, so the code below 
+    # is not necessary and needs to be rethought.
+		#$ret<data>     = arrayToHash($ret<data>, 'item_id');
+		#$ret<filtered> = arrayToHash($ret<filtered>, 'item_id') 
+    #  if $ret<filtered>:exists;
 		$ret;
 	}
 
@@ -330,12 +331,16 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/contracts/{ $cid }/items/");
 	}
 
-	method getCorporationHistory($characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
+	method getCorporationHistory(
+    $characterID = self.sso.characteriD, 
+    :$datasource
+  ) {
 		die "<characterID> must be an integer"
 			unless $characterID ~~ Int;
 
-		self.requestByPrefix("{ $cid }/corporationhistory/", :$datasource);
+		self.requestByPrefix(
+      "{ $characterID }/corporationhistory/", :$datasource
+    );
 	}
 
 	method getCSPA(@characterIDs, :$datasource) {
@@ -366,11 +371,10 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/fleet/", $datasource);
 	}
 
-	method getInformation($characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
-		die "<characterID> must be an integer" unless $cid.Int ~~ Int;
+	method getInformation(Int() $characterID = self.sso.characterID, :$datasource) {
+		die "<characterID> must be an integer" unless $characterID ~~ Int;
 
-		self.requestByPrefix("{ $cid }/", :$datasource);
+		self.requestByPrefix("{ $characterID }/", :$datasource);
 	}
 
 	method getImplants(:$datasource) {
@@ -476,12 +480,10 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/planets/", :$datasource);
 	}
 
-	method getPortrait($characterID?, :$datasource) {
-		my $cid = $characterID // self.sso.characterID;
-		die "<characterID> must be an integer"
-			unless $characterID ~~ Int;
+	method getPortrait($characterID = self.sso.characterID, :$datasource) {
+		die "<characterID> must be an integer" unless $characterID ~~ Int;
 
-		self.requestByPrefix("{ $cid }/portrait/", :$datasource);
+		self.requestByPrefix("{ $characterID }/portrait/", :$datasource);
 	}
 
 	method getRecentKillmails(:$datasource) {

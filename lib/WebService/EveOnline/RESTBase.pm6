@@ -113,7 +113,8 @@ class WebService::EveOnline::RESTBase {
 				last if $page++ >= $maxPage;
 			}
 		}
-		$retVal<filtered> = [ $retVal<data>.grep($filter).flat ] if $filter.defined;
+		$retVal<filtered> = [ $retVal<data>.grep({ $filter($_) }).flat ] 
+      if $filter.defined;
 		$retVal;
 	}
 
@@ -138,8 +139,12 @@ class WebService::EveOnline::RESTBase {
 		:$contentType = 'application/x-www-form-urlencoded'
 	) {
 		my $newHeaders;
-		if $!sso.defined {
-			$!sso.refreshToken if DateTime.now > $!sso.expires;
+		with $!sso {
+      # Need a way to restart the SSO process.
+      $!sso.checkExpiry;
+      my ($d, $e) = (DateTime.now.posix, $!sso.expires);
+      say "{ $d } / { $e } / { $e - $d }";
+			die 'Expired token detected' if $d > $e;
 		  $newHeaders = $!sso.getHeader;
 			$newHeaders.append($headers.pairs);
 		}

@@ -37,15 +37,15 @@ class WebService::EveOnline::ESI::Base {
 
 		#$url ~= '/' unless $url.substr(* - 1) eq '/';
 
-		if $datasource.defined {
-			# cw: It would be better if this were not a set of literals, but we
-			#     can come back and revisit, later.
-			die "Invalid datasource!"
-				unless $datasource eq <latest legacy dev>.any;
-        
-    	$url ~= "?datasource={$datasource}";
-			$nf = 1;
-		}
+		# if $datasource.defined {
+		# 	# cw: It would be better if this were not a set of literals, but we
+		# 	#     can come back and revisit, later.
+		# 	die "Invalid datasource!"
+		# 		unless $datasource eq <latest legacy dev>.any;
+    # 
+    # 	$url ~= "?datasource={$datasource}";
+		# 	$nf = 1;
+		# }
 		for %args.keys -> $k {
 			$url ~= "?{ $k }={ %args{$k} }" if %args{$k};
 		}
@@ -72,7 +72,7 @@ class WebService::EveOnline::ESI::Base {
 	) {
 		my $url = self!buildUrl($prefix, :$datasource, :%args);
 
-		#say "ESI-U [{$method}]: $url";
+		say "ESI-U [{$method}]: $url";
 
 		do given $method {
 			when RequestMethod::GET | RequestMethod::DELETE {
