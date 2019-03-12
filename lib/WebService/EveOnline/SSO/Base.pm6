@@ -93,7 +93,7 @@ class WebService::EveOnline::SSO::Base {
         # Check for expired refresh token
         if $rte <= DateTime.now.posix {
           # Within time for refresh_token, 
-          say 'Expired refresh';
+          say 'Refreshing';
           my ($retries, $valid) = (5, False);
           
           while $retries {
@@ -152,7 +152,8 @@ class WebService::EveOnline::SSO::Base {
     }
     say "SSO: { self.gist } / { self.WHERE }";
     $lock.protect({
-      %!privateData<_><token refresh_token expires CharacterID>:delete 
+      %!privateData<_><token refresh_token expires CharacterID>:delete;
+      $!tokenData = {};
     }) if $clearData;
   }
   
@@ -276,13 +277,16 @@ class WebService::EveOnline::SSO::Base {
     return unless $!privateFile.IO.e;
     my $pd = Config::INI::parse($!privateFile.IO.slurp);
     
-    $pd<CharacterID>   = $!characterID;
-    $pd<token>         = $.tokenData<access_token>;
-    $pd<refresh_token> = $.tokenData<refresh_token>;
-    $pd<expires>       = DateTime
+    my $apd := %!privateData<_>;
+    $apd<CharacterID>   = $pd<CharacterID>   = $!characterID;
+    $apd<token>         = $pd<token>         = $.tokenData<access_token>;
+    $apd<refresh_token> = $pd<refresh_token> = $.tokenData<refresh_token>;
+    $apd<expires>       = $pd<expires>       = DateTime
       .now
       .later( seconds => $.tokenData<expires_in> )
       .posix;
+    # Work around bug in Config::INI::Writer.
+    $pd<_>:delete;
       
     use Config::INI::Writer;
     Config::INI::Writer::dumpfile($pd, $!privateFile);

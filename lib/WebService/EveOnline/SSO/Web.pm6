@@ -73,8 +73,8 @@ class WebService::EveOnline::SSO::Web {
               #say "retrieved code [ { ~$/[0] } ]";
               $a.window.hide;
               self.refreshToken(~$/[0]);
-              $!init.keep;
               $a.exit;
+              $!init.keep;
             }
           }
           
@@ -111,7 +111,9 @@ class WebService::EveOnline::SSO::Web {
   
   method await-init {
     return unless $!init && $!init ~~ Promise;
+    say 'Awaiting SSO::Web init...';
     await $!init;
+    say 'SSO::Web init finished!';
   } 
       
 }
