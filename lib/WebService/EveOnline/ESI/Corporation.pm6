@@ -9,6 +9,7 @@ class WebService::EveOnline::ESI::Corporation {
   also is WebService::EveOnline::ESI::Base;
 
   has $!corporationID;
+  has $.info;
 
   submethod BUILD {
     use WebService::EveOnline::ESI::Character;
@@ -41,7 +42,9 @@ class WebService::EveOnline::ESI::Corporation {
 
   method getInformation($corpId?, :$datasource) {
     my $cid = self!getCorpId($corpId);
-    self.requestByPrefix("{ $cid }/", :$datasource);
+    my $i = self.requestByPrefix("{ $cid }/", :$datasource);
+    $!info = $i<data>;
+    $i;
   }
 
   method getAllianceHistory($corpId?, :$datasource) {
