@@ -12,22 +12,12 @@ class WebService::EveOnline::SSO::Web {
   has $!wv;
   has $!init;
   
-  # This will work, but may be a bit confusing to end-users. We take SOLE
-  # control of GTK, here (and anything that uses it). This may be off-putting
-  # for end-users who may wish to use GTK further.
-  submethod BUILD (:$appGTK is copy) {    
-    return with self.privateData<_><token>;
-    
-    self.getToken($appGTK);
-  }
-  
   method new (
     :@scopes,
     :$realm,
     :$section,
     :$privatePrefix,
     :$privateFile,
-    :$appGTK
   ) {
     self.bless(
       :@scopes, 
@@ -35,11 +25,15 @@ class WebService::EveOnline::SSO::Web {
       :$section, 
       :$privatePrefix, 
       :$privateFile,
-      :$appGTK
     );
   }
   
+  # This will work, but may be a bit confusing to end-users. We take SOLE
+  # control of GTK, here (and anything that uses it). This may be off-putting
+  # for end-users who may wish to use GTK further.
   method getToken($appGTK?) {
+    return with self.privateData<_><token>;
+    
     # Entry point now looks like this: 
     # https://login.eveonline.com/oauth/authorize/?
     #  response_type=code&
@@ -109,11 +103,11 @@ class WebService::EveOnline::SSO::Web {
 	# 	self.setTokenData($json);
   # }
   
-  method await-init {
+  method await-auth {
     return unless $!init && $!init ~~ Promise;
-    say 'Awaiting SSO::Web init...';
+    say 'Awaiting SSO::Web auth...';
     await $!init;
-    say 'SSO::Web init finished!';
+    say 'SSO::Web auth finished!';
   } 
       
 }

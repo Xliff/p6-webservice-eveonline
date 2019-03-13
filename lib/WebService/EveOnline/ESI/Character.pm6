@@ -371,7 +371,10 @@ DIE
 		self.requestByPrefix("{ self.sso.characterID }/fleet/", $datasource);
 	}
 
-	method getInformation(Int() $characterID = self.sso.characterID, :$datasource) {
+	method getInformation(
+    Int() $characterID = self.sso.characterID, 
+    :$datasource
+  ) {
 		die "<characterID> must be an integer" unless $characterID ~~ Int;
 
 		self.requestByPrefix("{ $characterID }/", :$datasource);

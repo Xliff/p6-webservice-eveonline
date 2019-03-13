@@ -7,12 +7,15 @@ use WebService::EveOnline::ESI::Alliance;
 use WebService::EveOnline::ESI::Corporation;
 use WebService::EveOnline::ESI::Universe;
 
-my ($uni, $corp, $ali, $o_dbh, $g_sth, $lock, %eid);
+# Concurrency.
+constant BATCH = 5;
+
+my ($uni, $corp, $ali, $o_dbh, @g_sth, $lock, %eids);
 $lock = Lock.new;
 
 sub deleteEntries {
-  say "Deleting { %eid.keys.elems } entries...";
-  for %eid.keys.rotor(100) -> $b {
+  say "Deleting { %eids.keys.elems } entries...";
+  for %eids.keys.rotor(100) -> $b {
     my $sth = $o_dbh.prepare(qq:to/SQL/);
 DELETE FROM publicStructures WHERE id IN ({ $b.Array.join(',') })
 SQL
@@ -26,11 +29,10 @@ sub getStructureIDs($t) {
 SELECT id FROM { $t }
 SQL
     
-  $sth.execute($sid);
-  my @ids = $sth.allrows().flat {
-  if @ids.elems {
-    say "Currently storing{ @id.elems } entries...";
-    %eid{$_} = 1 for @ids;
+  $sth.execute;
+  if ( my @ids = $sth.allrows().flat ).elems {
+    say "Currently storing{ @ids.elems } entries...";
+    %eids{$_} = 1 for @ids;
   }
 }
 
@@ -65,45 +67,32 @@ sub populateData($t, $sid) {
     }
   }
   
+  say "Adding { $s<name> } (#{$sid})...";
   $lock.protect({
-    $g_sth.execute(
-      $sid, 
-      $s<name>,
-      $s<position><x>,
-      $s<position><y>,
-      $s<position><z>,
-      $s<solar_system_id>,
-      $s<type_id>
-    );
+    for @g_sth {
+      when 0 {
+        .execute(
+          $sid, 
+          $s<name>,
+          $s<position><x>,
+          $s<position><y>,
+          $s<position><z>,
+          $s<solar_system_id>,
+          $s<type_id>
+        );
+      }
+      
+      when 1 { .execute($sid) }
+    }
   });
   
-  my $sql = qq:to/SQL/.chomp;
-UPDATE { $t }
-SET 
-  seclev   = (
-    SELECT security 
-    FROM static.SolSystems 
-    WHERE solarSystemID = { $t }.systemID
-  ),
-  regionID = (
-    SELECT regionID
-    FROM static.SolSystems
-    WHERE solarSystemID = { $t }.systemID
-  )
-WHERE
-  { $t }.id = ?
-SQL
-
-  $sth = $o_dbh.prepare($sql);
-  
-  say "Adding { $s<name> } (#{$sid})...";
-  $lock.protect({ $sth.execute($sid) });
   False;
 }
 
-sub populateStructs(@s) {
+sub populateStructs($t, @s) {
   my @p;
-  for @s.rotor(@s.elems / BATCH, :partial) -> $list {
+ 
+  for @s.rotor( (1, @s.elems / BATCH).max.Int, :partial) -> $list {
     @p.append: start {
       for $list.Array -> $l { 
         my $p = start { sleep 2 unless populateData($t, $l) }
@@ -149,7 +138,8 @@ sub MAIN (
     :realm<ESI>,
     :section<getStructureData>
   );
-  $sso.await-init;
+  $sso.getToken();
+  $sso.await-auth;
   
   my $sth = $o_dbh.prepare("ATTACH DATABASE '$static' AS static");
   $sth.execute;
@@ -157,17 +147,16 @@ sub MAIN (
   $uni  = WebService::EveOnline::ESI::Universe.new(:$sso);
   $corp = WebService::EveOnline::ESI::Corporation.new(:$sso);
   $ali  = WebService::EveOnline::ESI::Alliance.new(:$sso);
-  
-  # INSURE concurrency.
-  constant BATCH = 4;
-  
+    
   #for <publicStructures privateStructures> -> $t {
-  for <privateStructures>.List -> $t {
+  for <publicStructures>.List -> $t {
+    my $pub = $t.starts-with('public');
+    
     if $create {
       my $csth = $o_dbh.prepare(qq:to/SQL/.chomp);
 CREATE TABLE { $t } (
   id INTEGER PRIMARY KEY NOT NULL,
-  name VARCHAR(100),
+  name VARCHAR(128) UNIQUE NOT NULL,
 	systemID INTEGER,
   regionID INTEGER,
   typeID INTEGER,
@@ -181,7 +170,7 @@ SQL
     }
   
     # TODO: Do A & A check for privateStructures, when it comes up.
-    $g_sth = $o_dbh.prepare(qq:to/SQL/.chomp);
+    @g_sth.push: $o_dbh.prepare(qq:to/SQL/.chomp);
 INSERT INTO { $t } (
   id,
   name,
@@ -191,12 +180,30 @@ INSERT INTO { $t } (
 ) VALUES (?, ?, ?,?,?, ?, ?)
 SQL
 
+  @g_sth.push: $o_dbh.prepare(qq:to/SQL/.chomp);
+UPDATE { $t }
+SET 
+  seclev   = (
+    SELECT security 
+    FROM static.SolSystems 
+    WHERE solarSystemID = { $t }.systemID
+  ),
+  regionID = (
+    SELECT regionID
+    FROM static.SolSystems
+    WHERE solarSystemID = { $t }.systemID
+  )
+WHERE
+  { $t }.id = ?
+SQL
+
    given $t { 
       # Easy
+      getStructureIDs($t);
       when 'publicStructures'  { 
         my $structs = $uni.getStructures();
         say "Processing { $structs<data>.elems } entries...";
-        populateStructs($structs<data>.elems);
+        populateStructs($t, $structs<data>);
       }
       
       # Tricky. Need corp AND alliances. May as well go for alliance if
@@ -209,21 +216,24 @@ SQL
         #     a)  There will ALWAYS be a corp entry, even if its just a 
         #         starter.
         my @sids;
-        my @cids = $corp.info<alliance_id>.defined ??
-          $ali.getCorporations()
-          !!
-          $corp.corporation-id.Array;
+        my @cids = $ali.getCorporations()<data>.flat;
+        @cids.push: $corp.corporation-id unless @cids;
         #     b)  Check corp list for list of structures.
+        say "C: { @cids.gist }";
         for @cids -> $cid {
           try {
             CATCH { default { .message.say } } 
             @sids.append: $corp.getStructures($cid);
           }
         }
+        # Populate anti-collision structure.
+        %eids{$_} = 1 for @sids;
         #         i)  Go through list of structures.
-        populateStructs(@sids);
+        populateStructs($t, @sids);
       }
     }
       
   }
+  
+  LEAVE { $o_dbh.dispose }
 }

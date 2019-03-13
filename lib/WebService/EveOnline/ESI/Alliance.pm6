@@ -17,8 +17,8 @@ class WebService::EveOnline::ESI::Alliance {
       sso => self.sso 
     );
 		my $i = $corp.getInformation();
-		$!corp-id = $i<corporation_id>;
-    $!alliance_id = $i<alliance_id>;
+		$!corp-id = $i<data><corporation_id>;
+    $!alliance_id = $i<data><alliance_id>;
 	}
   
   method new (:$sso) {

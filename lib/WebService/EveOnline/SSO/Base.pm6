@@ -71,6 +71,15 @@ class WebService::EveOnline::SSO::Base {
       if $!privateFile.IO.e;
    %!privateData<_> = %pd<_>;
    %!privateData{$!section} = %pd{$!section};
+   # Is there a way to pass this to setToken, so there is a single point 
+   # of access to set $!tokenData?
+   $!expires = %pd<_><expires>;
+   $!tokenData = {
+     refresh_token => %pd<_><refresh_token>,
+     access_token  => %pd<_><token>,
+     expires_in    => $!expires - DateTime.now.posix
+   };
+   $!characterID = %pd<_><CharacterID>;
    say "PD: { %pd.gist } / { %pd<_><expires>.^name }";
   }
   
@@ -91,32 +100,33 @@ class WebService::EveOnline::SSO::Base {
         my $rte = %!privateData<_><expires> + 15 * 60; # 15 minutes later
         
         # Check for expired refresh token
-        if $rte <= DateTime.now.posix {
+        if $rte > DateTime.now.posix {
           # Within time for refresh_token, 
-          say 'Refreshing';
           my ($retries, $valid) = (5, False);
           
-          while $retries {
+          say 'Checking refresh token...';
+          while $retries-- {
             try {
               CATCH { 
                 default {
                   given .message {
                     when /'502' | '503' | '504'/ {
                       say 'Server error. Retrying...';
-                      $retries--;
+                      next;
                     }
-                    next;
-                  }
-                  default {
-                    .message.say; 
-                    say 'Refresh expired.';
-                    last;
+                    
+                    default {
+                      .message.say; 
+                      say 'Refresh expired.';
+                      last;
+                    }
                   }
                 }
               }
               # Attempt to retrieve new access_token, otherwise clear 
               # retrieved data.
               $lock.protect({
+                say 'Refreshing';
                 self.refreshToken($_, :refresh) 
                   with %!privateData<_><refresh_token>;
               });
@@ -126,17 +136,20 @@ class WebService::EveOnline::SSO::Base {
           }
           $clearData = True unless $valid;
         } else {
+          say 'Refresh token expired...';
           $clearData = True;
         }
       } else {
         # Token is not expired. Set tokenData if it has not already
         # been done.
         $lock.protect({
-          without $!tokenData {
+          with $!tokenData {
+            
+          } else {
             say 'Resetting...';
             $!tokenData = {
               access_token  => %!privateData<_><token>,
-              refresh_token => %!privateData<_><trefresh_token>,
+              refresh_token => %!privateData<_><refresh_token>,
               expires_in    => %!privateData<_><expires> - DateTime.now.posix
             };
             $!characterID = %!privateData<_><CharacterID>;
@@ -147,11 +160,11 @@ class WebService::EveOnline::SSO::Base {
       }
     } else {
       # Without restart data. Clear all keys, just to be sure.
-      say 'Clearing...';
       $clearData = True;
     }
     say "SSO: { self.gist } / { self.WHERE }";
     $lock.protect({
+      say 'Clearing...';
       %!privateData<_><token refresh_token expires CharacterID>:delete;
       $!tokenData = {};
     }) if $clearData;
