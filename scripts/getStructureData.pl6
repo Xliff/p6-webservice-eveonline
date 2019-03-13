@@ -149,7 +149,7 @@ sub MAIN (
   $ali  = WebService::EveOnline::ESI::Alliance.new(:$sso);
     
   #for <publicStructures privateStructures> -> $t {
-  for <publicStructures>.List -> $t {
+  for <publicStructures privateStructures>.List -> $t {
     my $pub = $t.starts-with('public');
     
     if $create {
@@ -219,16 +219,17 @@ SQL
         my @cids = $ali.getCorporations()<data>.flat;
         @cids.push: $corp.corporation-id unless @cids;
         #     b)  Check corp list for list of structures.
-        say "C: { @cids.gist }";
         for @cids -> $cid {
           try {
             CATCH { default { .message.say } } 
-            @sids.append: $corp.getStructures($cid);
+            @sids.append: $corp.getStructures($cid)<data>;
           }
         }
         # Populate anti-collision structure.
+        %eids = %();
         %eids{$_} = 1 for @sids;
         #         i)  Go through list of structures.
+        say "Processing { @sids.elems } entries...";
         populateStructs($t, @sids);
       }
     }

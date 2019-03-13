@@ -143,7 +143,7 @@ class WebService::EveOnline::RESTBase {
       # Need a way to restart the SSO process.
       $!sso.checkExpiry;
       my ($d, $e) = (DateTime.now.posix, $!sso.expires);
-      say "{ $d } / { $e } / { $e - $d }";
+      # say "{ $d } / { $e } / { $e - $d }";
 			die 'Expired token detected' if $d > $e;
 		  $newHeaders = $!sso.getHeader;
 			$newHeaders.append($headers.pairs);

@@ -80,7 +80,7 @@ class WebService::EveOnline::SSO::Base {
      expires_in    => $!expires - DateTime.now.posix
    };
    $!characterID = %pd<_><CharacterID>;
-   say "PD: { %pd.gist } / { %pd<_><expires>.^name }";
+   #say "PD: { %pd.gist } / { %pd<_><expires>.^name }";
   }
   
   # Must be defined in subclasses
@@ -162,7 +162,7 @@ class WebService::EveOnline::SSO::Base {
       # Without restart data. Clear all keys, just to be sure.
       $clearData = True;
     }
-    say "SSO: { self.gist } / { self.WHERE }";
+    # say "SSO: { self.gist } / { self.WHERE }";
     $lock.protect({
       say 'Clearing...';
       %!privateData<_><token refresh_token expires CharacterID>:delete;
