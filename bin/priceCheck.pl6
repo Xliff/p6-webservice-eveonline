@@ -45,26 +45,26 @@ my @stations = (60005686, 60004588, 60003760);		# Jita.
 #my @stations = (60005686, 60004588);							# NO JITA!
 my @avoidance;
 
+sub getSecLev($id) {
+	state %sec_cache;
+
+	return %sec_cache<id> if %sec_cache<id>.defined;
+	my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
+		SELECT security
+		FROM Stations
+		WHERE stationID = ?
+	STATEMENT
+
+	$sth.execute($id);
+
+	my @r = $sth.allrows;
+
+	return unless @r.elems;
+	%sec_cache{$id} = @r[0];
+}
+
 sub quickLook(:$typeID) {
 	return $api.quicklook(:$typeID) if $api ~~ WebService::EveOnline::EveCentral;
-
-	sub getSecLev($id) {
-		state %sec_cache;
-
-		return %sec_cache<id> if %sec_cache<id>.defined;
-		my $sth = $sq_dbh.prepare(q:to/STATEMENT/);
-			SELECT security
-			FROM Stations
-			WHERE stationID = ?
-		STATEMENT
-
-		$sth.execute($id);
-
-		my @r = $sth.allrows;
-
-		return unless @r.elems;
-		%sec_cache{$id} = @r[0];
-	}
 
 	my $sth = $sq_dbh.prepare(qq:to/STATEMENT/);
 		 SELECT r.regionID, r.regionName, s.stationID, s.stationName
