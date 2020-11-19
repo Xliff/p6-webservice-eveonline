@@ -11,53 +11,64 @@ use WebkitGTK::JavaScript::Context;
 
 use GIO::Roles::GFile;
 
+my $wv;
 my $a = GTK::Application.new(
   title  => 'org.genex.esi-reference-browser',
   width  => 800,
   height => 1000
 );
 
-sub getScript {
-  $=pod.grep( *.name eq 'SCRIPT1' ).map({
+sub getPodSection ($n) {
+  my $t = $=pod.grep( *.name eq $n ).map({
     # cw: Note to #raku -- this is still very painful!
     .contents.map( *.contents[0] ).join("\n")
   }).join('');
 }
 
-my $blockSize = 20;
+sub getScript {
+  getPodSection('SCRIPT1');
+}
+
+my $blockSize = 10;
+sub getBatchScript ($s, $n) {
+  getPodSection('SCRIPT2').sprintf($s, $n, $blockSize);
+}
+
 my $descriptions;
-sub getMoreBlocks ($startAt = 0, $blocksLeft = $descriptions); {
-  GLib::Timeout(1000, {
-    $*wv.run_javascript(
-      getScript($startAt, $blocksLeft, $blockSize),
+sub getMoreBlocks ($startAt = 0, $blocksLeft = $descriptions) {
+  GLib::Timeout.add(6000, {
+    CATCH { default { .message.say; .backtrace.concise.say } }
+
+    $wv.run_javascript(
+      getBatchScript($startAt, $blocksLeft),
       -> *@a {
         CATCH { default { .message.say } }
 
+        # Tracking.
+        say "SA: { $startAt } / BL: { $blocksLeft } / BS: { $blockSize }";
+
         # Finish the javascript.
-        my $js_result = $wv.run_javascript_finish(@a[1]);
-        without $js_result {
+        my $jsResult = $wv.run_javascript_finish(@a[1]);
+        without $jsResult {
           say "Error running javascript: { $ERROR.message }" with $ERROR;
           return;
         }
-        my $blocks-left;
-        if $val.is_number {
-          $blocks-left = $val.to_int32;
-          say "BL: { $blocks-left }";
-        } else {
-          die 'Could not get number of description blocks as a number!';
-        }
-        $blocks-left ?? getMoreBlocks($startAt + $blockSize, $blocksLeft);
-                     !! savePage;
+
+        my $jsVal  = $jsResult.value;
+        my $retVal = $jsVal.is_number ?? $jsVal.to_int32
+                                      !! die 'Return val not a number!';
+        $retVal > 0 ?? getMoreBlocks($startAt + $blockSize, $retVal)
+                    !! savePage;
       }
     );
 
-    G_SOURCE_REMOTE.Int;
+    G_SOURCE_REMOVE.Int;
   });
 }
 
 sub savePage {
-  GLib::Timeout.add(60000, -> *@a {
-    $*wv.run_javascript(
+  GLib::Timeout.add(6000, -> *@a {
+    $wv.run_javascript(
       'document.documentElement.outerHTML.toString()',
       -> *@a {
         CATCH { default { .message.say } }
@@ -65,8 +76,8 @@ sub savePage {
         say 'Got here!';
 
         # Finish the javascript.
-        my $js_result = $wv.run_javascript_finish(@a[1]);
-        without $js_result {
+        my $jsResult = $wv.run_javascript_finish(@a[1]);
+        without $jsResult {
           say "Error running javascript: { $ERROR.message }" with $ERROR;
           return;
         }
@@ -74,7 +85,7 @@ sub savePage {
         say 'Got here, too!';
 
         # Save the HTML...
-        my $val = $js_result.get_js_value;
+        my $val = $jsResult.value;
         say "V: $val";
         say "VS: { $val.to_string }";
         "ESI-HTML.html".IO.spurt($val.to_string) if $val && $val.is_string;
@@ -88,20 +99,12 @@ sub savePage {
   });
 }
 
-sub getBatchScript ($s, $n) {
-  my $t = $=pod.grep( *.name eq 'SCRIPT2' ).map({
-    # cw: Note to #raku -- this is still very painful!
-    .contents.map( *.contents[0] ).join("\n")
-  }).join('');
-  sprintf($t, $s, $n);
-}
-
 $a.activate.tap({
-  my $*wv = WebkitGTK::WebView.new;
+  $wv = WebkitGTK::WebView.new;
 
   # A lot more work when integrating with JavaScript.
   my $p;
-  $*wv.load-changed.tap(-> *@a {
+  $wv.load-changed.tap(-> *@a {
     my $time = 60;
 
     if @a[1] == WEBKIT_LOAD_FINISHED {
@@ -115,24 +118,26 @@ $a.activate.tap({
       });
 
       # Wait for page to settle.
-      sleep 5;
+      sleep 2;
 
       # Attempt to expand all -- first level
-      $*wv.run_javascript(
-        getScript(1),
+      $wv.run_javascript(
+        getScript,
         -> *@a {
           CATCH { default { .message.say } }
 
           # Finish the javascript.
-          my $js_result = $wv.run_javascript_finish(@a[1]);
-          without $js_result {
+          my $jsResult = $wv.run_javascript_finish(@a[1]);
+          without $jsResult {
             say "Error running javascript: { $ERROR.message }" with $ERROR;
             return;
           }
         }
       );
 
-      GLib::Timeout.add(4000, -> *@a {
+      GLib::Timeout.add(2000, -> *@a {
+        CATCH { default { .message.say; .backtrace.concise.say } }
+
         say 'Expand second level...';
 
         $wv.run_javascript(
@@ -143,26 +148,26 @@ $a.activate.tap({
             sections.length;
           ],
           -> *@a {
-            CATCH { default { .message.say } }
+            CATCH { default { .message.say; .backtrace.concise.say } }
 
             # Finish the javascript.
-            my $js_result = $wv.run_javascript_finish(@a[1]);
-            without $js_result {
+            my $jsResult = $wv.run_javascript_finish(@a[1]);
+            without $jsResult {
               say "Error running javascript: { $ERROR.message }" with $ERROR;
               return;
             }
-            my $val = $js_result.value;
+            my $val = $jsResult.value;
             if $val.is_number {
               $descriptions = $val.to_int32;
               say "#D: { $descriptions }";
             } else {
-              die 'Could not getr number of description blocks as a number!';
+              die 'Could not get number of description blocks as a number!';
             }
+
+            # Attempt to expand all -- second level
+            getMoreBlocks;
           }
         );
-
-        # Attempt to expand all -- second level
-        getMoreBlocks;
 
         G_SOURCE_REMOVE.Int;
       });
@@ -170,8 +175,8 @@ $a.activate.tap({
     }
   });
 
-  $*wv.load_uri("http://esi.evetech.net");
-  $a.window.add($*wv);
+  $wv.load_uri("http://esi.evetech.net");
+  $a.window.add($wv);
   $a.window.title = 'ESI Reference Browser';
   $a.window.show_all;
 });
@@ -189,12 +194,15 @@ for (i = 0; i < l; i++) {
 
 =begin SCRIPT2
 var startAt = %d;
-var numDescs = %d;
+var numDecs = %d;
 var batchSize = %d;
 var sections = document.getElementsByClassName('opblock-summary-description');
 var l = sections.length;
 var i;
 for (i = startAt; i < startAt + batchSize; i++) {
+  if (i >= sections.length) {
+    break;
+  }
   sections[i].click();
 };
 numDecs - batchSize
