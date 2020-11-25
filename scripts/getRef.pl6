@@ -11,7 +11,7 @@ use WebkitGTK::JavaScript::Context;
 
 use GIO::Roles::GFile;
 
-my $wv;
+my ($wv, $canceller);
 my $a = GTK::Application.new(
   title  => 'org.genex.esi-reference-browser',
   width  => 800,
@@ -73,26 +73,22 @@ sub savePage {
       -> *@a {
         CATCH { default { .message.say } }
 
-        say 'Got here!';
-
         # Finish the javascript.
+        $canceller.cancel;
         my $jsResult = $wv.run_javascript_finish(@a[1]);
         without $jsResult {
           say "Error running javascript: { $ERROR.message }" with $ERROR;
           return;
         }
 
-        say 'Got here, too!';
-
         # Save the HTML...
         my $val = $jsResult.value;
-        say "V: $val";
-        say "VS: { $val.to_string }";
         "ESI-HTML.html".IO.spurt($val.to_string) if $val && $val.is_string;
 
         $a.quit;
         exit;
       }
+
     );
 
     G_SOURCE_REMOVE.Int;
@@ -105,16 +101,9 @@ $a.activate.tap({
   # A lot more work when integrating with JavaScript.
   my $p;
   $wv.load-changed.tap(-> *@a {
-    my $time = 60;
-
     if @a[1] == WEBKIT_LOAD_FINISHED {
-      my $c;
-      $c = $*SCHEDULER.cue(every => 1, {
+      $canceller = $*SCHEDULER.cue(every => 1, {
         say "Waiting {$time--}...";
-        unless $time {
-          say 'Finished';
-          $c.cancel;
-        }
       });
 
       # Wait for page to settle.
